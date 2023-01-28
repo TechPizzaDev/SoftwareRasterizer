@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Runtime.InteropServices;
+using TerraFX.Interop.Windows;
 
 namespace SoftwareRasterizer;
 
@@ -6,6 +7,7 @@ internal class Program
 {
     static void Main(string[] args)
     {
-        Console.WriteLine("Hello, World!");
+        nint hinstance = Marshal.GetHINSTANCE(typeof(Main).Module);
+        SoftwareRasterizer.Main.wWinMain((HINSTANCE)hinstance);
     }
 }
