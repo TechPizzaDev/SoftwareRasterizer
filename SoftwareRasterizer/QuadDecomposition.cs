@@ -22,6 +22,7 @@ using System.Runtime.Intrinsics;
 namespace SoftwareRasterizer;
 
 using static VectorMath;
+using static Intrinsics;
 
 using Vertex = Int32;
 
@@ -37,6 +38,11 @@ public readonly struct Graph
     public Graph(int length)
     {
         m_adjacencyList = new List<Vertex>[length];
+
+        for (int i = 0; i < m_adjacencyList.Length; i++)
+        {
+            m_adjacencyList[i] = new List<Vertex>();
+        }
     }
 }
 

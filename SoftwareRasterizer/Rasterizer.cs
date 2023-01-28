@@ -18,6 +18,7 @@ using System.Runtime.Intrinsics;
 namespace SoftwareRasterizer;
 
 using static VectorMath;
+using static Intrinsics;
 
 public unsafe partial class Rasterizer
 {
@@ -72,7 +73,7 @@ public unsafe partial class Rasterizer
         m_modelViewProjection = (float*)NativeMemory.AlignedAlloc(16 * sizeof(float), (uint)sizeof(Vector128<float>));
         m_modelViewProjectionRaw = (float*)NativeMemory.AlignedAlloc(16 * sizeof(float), (uint)sizeof(Vector128<float>));
 
-        m_depthBuffer = (Vector128<int>*)NativeMemory.AlignedAlloc(width * height / 8 * (uint)sizeof(Vector128<float>), (uint)sizeof(Vector128<int>));
+        m_depthBuffer = (Vector128<int>*)NativeMemory.AlignedAlloc(width * height / 8 * (uint)sizeof(Vector128<float>), (uint)sizeof(Vector256<int>));
 
         m_hiZ_Size = m_blocksX * m_blocksY + 8; // Add some extra padding to support out-of-bounds reads
         uint hiZ_Bytes = m_hiZ_Size * sizeof(ushort);
@@ -255,7 +256,7 @@ public unsafe partial class Rasterizer
 
         // Clamp bounds
         minsXY = _mm_max_ps(minsXY, _mm_setzero_ps());
-        maxsXY = _mm_min_ps(maxsXY, _mm_setr_ps((float)(m_width - 1), (float)(m_height - 1), (float)(m_width - 1), (float)(m_height - 1)));
+        maxsXY = _mm_min_ps(maxsXY, _mm_setr_ps(m_width - 1f, m_height - 1f, m_width - 1f, m_height - 1f));
 
         // Negate maxes so we can round in the same direction
         maxsXY = _mm_xor_ps(maxsXY, minusZero);
@@ -264,7 +265,7 @@ public unsafe partial class Rasterizer
         Vector128<float> boundsF = _mm_min_ps(_mm_unpacklo_ps(minsXY, maxsXY), _mm_unpackhi_ps(minsXY, maxsXY));
 
         // Round towards -infinity and convert to int
-        Vector128<int> boundsI = _mm_cvttps_epi32(_mm_round_ps(boundsF, _MM_FROUND_TO_NEG_INF | _MM_FROUND_NO_EXC));
+        Vector128<int> boundsI = _mm_cvttps_epi32(_mm_round_to_neg_inf_ps(boundsF));
 
         // Store as scalars
         int* bounds = stackalloc int[4];
@@ -308,7 +309,7 @@ public unsafe partial class Rasterizer
         uint blockMinY = minY / 8;
         uint blockMaxY = maxY / 8;
 
-        Vector128<int> maxZV = _mm_set1_epi16((ushort)(maxZ));
+        Vector128<int> maxZV = _mm_set1_epi16((short)(maxZ));
 
         // Pretest against Hi-Z
         for (uint blockY = blockMinY; blockY <= blockMaxY; ++blockY)
@@ -350,7 +351,7 @@ public unsafe partial class Rasterizer
 
                     Vector128<int> notVisible = _mm_cmpeq_epi16(_mm_min_epu16(rowDepth, maxZV), maxZV);
 
-                    uint visiblePixelMask = ~_mm_movemask_epi8(notVisible);
+                    uint visiblePixelMask = (uint)(~_mm_movemask_epi8(notVisible));
 
                     if ((rowSelector & visiblePixelMask) != 0)
                     {
@@ -437,10 +438,10 @@ public unsafe partial class Rasterizer
         Vector256<float> tC = _mm256_shuffle_ps(_Tmp2, _Tmp3, 0x88);
         Vector256<float> tD = _mm256_shuffle_ps(_Tmp2, _Tmp3, 0xDD);
 
-        _mm256_store_ps((float*)(@out + 0), tA);
-        _mm256_store_ps((float*)(@out + 2), tB);
-        _mm256_store_ps((float*)(@out + 4), tC);
-        _mm256_store_ps((float*)(@out + 6), tD);
+        _mm256_storeu_ps((float*)(@out + 0), tA);
+        _mm256_storeu_ps((float*)(@out + 2), tB);
+        _mm256_storeu_ps((float*)(@out + 4), tC);
+        _mm256_storeu_ps((float*)(@out + 6), tD);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -456,10 +457,10 @@ public unsafe partial class Rasterizer
         Vector256<int> tC = _mm256_unpacklo_epi64(_Tmp2, _Tmp3);
         Vector256<int> tD = _mm256_unpackhi_epi64(_Tmp2, _Tmp3);
 
-        _mm256_store_si256((Vector256<int>*)(@out + 0), tA);
-        _mm256_store_si256((Vector256<int>*)(@out + 2), tB);
-        _mm256_store_si256((Vector256<int>*)(@out + 4), tC);
-        _mm256_store_si256((Vector256<int>*)(@out + 6), tD);
+        _mm256_storeu_si256((Vector256<int>*)(@out + 0), tA);
+        _mm256_storeu_si256((Vector256<int>*)(@out + 2), tB);
+        _mm256_storeu_si256((Vector256<int>*)(@out + 4), tC);
+        _mm256_storeu_si256((Vector256<int>*)(@out + 6), tD);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -568,9 +569,12 @@ public unsafe partial class Rasterizer
         const uint angularResolution = 2000;
         const uint offsetResolution = 2000;
 
+        uint precomputedRasterTablesByteCount = OFFSET_QUANTIZATION_FACTOR * SLOPE_QUANTIZATION_FACTOR * sizeof(ulong);
         ulong* precomputedRasterTables = (ulong*)NativeMemory.AlignedAlloc(
-            byteCount: OFFSET_QUANTIZATION_FACTOR * SLOPE_QUANTIZATION_FACTOR * sizeof(ulong),
+            byteCount: precomputedRasterTablesByteCount,
             alignment: sizeof(ulong));
+
+        Unsafe.InitBlockUnaligned(precomputedRasterTables, 0, precomputedRasterTablesByteCount);
 
         for (uint i = 0; i < angularResolution; ++i)
         {
@@ -582,7 +586,7 @@ public unsafe partial class Rasterizer
             nx *= l;
             ny *= l;
 
-            uint slopeLookup = _mm_extract_epi32(quantizeSlopeLookup(_mm_set1_ps(nx), _mm_set1_ps(ny)), 0);
+            uint slopeLookup = (uint)_mm_extract_epi32(quantizeSlopeLookup(_mm_set1_ps(nx), _mm_set1_ps(ny)), 0);
 
             for (uint j = 0; j < offsetResolution; ++j)
             {
@@ -756,15 +760,15 @@ public unsafe partial class Rasterizer
             }
 
             // Round to integer coordinates to improve culling of zero-area triangles
-            Vector256<float> x0 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(X0, invW0), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
-            Vector256<float> x1 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(X1, invW1), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
-            Vector256<float> x2 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(X2, invW2), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
-            Vector256<float> x3 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(X3, invW3), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
+            Vector256<float> x0 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(X0, invW0)), _mm256_set1_ps(0.125f));
+            Vector256<float> x1 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(X1, invW1)), _mm256_set1_ps(0.125f));
+            Vector256<float> x2 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(X2, invW2)), _mm256_set1_ps(0.125f));
+            Vector256<float> x3 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(X3, invW3)), _mm256_set1_ps(0.125f));
 
-            Vector256<float> y0 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(Y0, invW0), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
-            Vector256<float> y1 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(Y1, invW1), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
-            Vector256<float> y2 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(Y2, invW2), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
-            Vector256<float> y3 = _mm256_mul_ps(_mm256_round_ps(_mm256_mul_ps(Y3, invW3), _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC), _mm256_set1_ps(0.125f));
+            Vector256<float> y0 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(Y0, invW0)), _mm256_set1_ps(0.125f));
+            Vector256<float> y1 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(Y1, invW1)), _mm256_set1_ps(0.125f));
+            Vector256<float> y2 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(Y2, invW2)), _mm256_set1_ps(0.125f));
+            Vector256<float> y3 = _mm256_mul_ps(_mm256_round_to_nearest_int_ps(_mm256_mul_ps(Y3, invW3)), _mm256_set1_ps(0.125f));
 
             // Compute unnormalized edge directions
             Vector256<float> edgeNormalsX0 = _mm256_sub_ps(y1, y0);
@@ -833,7 +837,7 @@ public unsafe partial class Rasterizer
             Vector256<int> modes;
             fixed (PrimitiveMode* modeTablePtr = modeTable)
             {
-                modes = _mm256_i32gather_epi32((int*)modeTablePtr, config, 4);
+                modes = _mm256_and_si256(_mm256_i32gather_epi32((int*)modeTablePtr, config, 1), _mm256_set1_epi32(0xff));
             }
 
             if (_mm256_testz_si256(modes, modes))
@@ -954,8 +958,8 @@ public unsafe partial class Rasterizer
             Vector256<int> minX, minY, maxX, maxY;
             minX = _mm256_max_epi32(_mm256_cvttps_epi32(_mm256_add_ps(minFx, _mm256_set1_ps(4.9999f / 8.0f))), _mm256_setzero_si256());
             minY = _mm256_max_epi32(_mm256_cvttps_epi32(_mm256_add_ps(minFy, _mm256_set1_ps(4.9999f / 8.0f))), _mm256_setzero_si256());
-            maxX = _mm256_min_epi32(_mm256_cvttps_epi32(_mm256_add_ps(maxFx, _mm256_set1_ps(11.0f / 8.0f))), _mm256_set1_epi32(m_blocksX));
-            maxY = _mm256_min_epi32(_mm256_cvttps_epi32(_mm256_add_ps(maxFy, _mm256_set1_ps(11.0f / 8.0f))), _mm256_set1_epi32(m_blocksY));
+            maxX = _mm256_min_epi32(_mm256_cvttps_epi32(_mm256_add_ps(maxFx, _mm256_set1_ps(11.0f / 8.0f))), _mm256_set1_epi32((int)m_blocksX));
+            maxY = _mm256_min_epi32(_mm256_cvttps_epi32(_mm256_add_ps(maxFy, _mm256_set1_ps(11.0f / 8.0f))), _mm256_set1_epi32((int)m_blocksY));
 
             // Check overlap between bounding box and frustum
             Vector256<int> inFrustum = _mm256_and_si256(_mm256_cmpgt_epi32(maxX, minX), _mm256_cmpgt_epi32(maxY, minY));
@@ -995,8 +999,8 @@ public unsafe partial class Rasterizer
             Vector256<float> greaterArea = _mm256_cmp_ps(_mm256_andnot_ps(minusZero256, area0), _mm256_andnot_ps(minusZero256, area2), _CMP_LT_OQ);
 
             // Force triangle area to be picked in the relevant mode.
-            Vector256<float> modeTriangle0 = _mm256_castsi256_ps(_mm256_cmpeq_epi32(modes, _mm256_set1_epi32(Triangle0)));
-            Vector256<float> modeTriangle1 = _mm256_castsi256_ps(_mm256_cmpeq_epi32(modes, _mm256_set1_epi32(Triangle1)));
+            Vector256<float> modeTriangle0 = _mm256_castsi256_ps(_mm256_cmpeq_epi32(modes, _mm256_set1_epi32((int)PrimitiveMode.Triangle0)));
+            Vector256<float> modeTriangle1 = _mm256_castsi256_ps(_mm256_cmpeq_epi32(modes, _mm256_set1_epi32((int)PrimitiveMode.Triangle1)));
             greaterArea = _mm256_andnot_ps(modeTriangle0, _mm256_or_ps(modeTriangle1, greaterArea));
 
 
@@ -1082,7 +1086,7 @@ public unsafe partial class Rasterizer
             slopeLookups2 = quantizeSlopeLookup(edgeNormalsX2, edgeNormalsY2);
             slopeLookups3 = quantizeSlopeLookup(edgeNormalsX3, edgeNormalsY3);
 
-            Vector256<int> firstBlockIdx = _mm256_add_epi32(_mm256_mullo_epi16(minY, _mm256_set1_epi32(m_blocksX)), minX);
+            Vector256<int> firstBlockIdx = _mm256_add_epi32(_mm256_mullo_epi16(minY, _mm256_set1_epi32((int)m_blocksX)), minX);
 
             _mm256_storeu_si256((Vector256<int>*)(firstBlocks), firstBlockIdx);
 
@@ -1101,7 +1105,7 @@ public unsafe partial class Rasterizer
 
             transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, slopeLookups);
 
-            uint validMask = _mm256_movemask_ps(_mm256_castsi256_ps(primitiveValid));
+            uint validMask = (uint)_mm256_movemask_ps(_mm256_castsi256_ps(primitiveValid));
 
             // Fetch data pointers since we'll manually strength-reduce memory arithmetic
             ulong* pTable = m_precomputedRasterTables;
@@ -1275,7 +1279,7 @@ public unsafe partial class Rasterizer
                         // Not all pixels covered - mask depth 
                         if (blockMask != 0xffff_ffff_ffff_ffff)
                         {
-                            Vector128<int> A = _mm_cvtsi64x_si128(blockMask);
+                            Vector128<int> A = _mm_cvtsi64x_si128((long)blockMask);
                             Vector128<int> B = _mm_slli_epi64(A, 4);
                             Vector256<int> C = _mm256_inserti128_si256(_mm256_castsi128_si256(A), B, 1);
                             Vector256<int> rowMask = _mm256_unpacklo_epi8(C, C);

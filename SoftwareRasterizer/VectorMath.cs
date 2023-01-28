@@ -12,6 +12,8 @@ using System.Diagnostics;
 
 namespace SoftwareRasterizer;
 
+using static Intrinsics;
+
 public static unsafe class VectorMath
 {
     // Cross product

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace SoftwareRasterizer;
 
@@ -9,11 +10,11 @@ public static unsafe class StableSort
         where TComparer : IComparer<T>
     {
         long length = end - start;
-        new Span<T>(start, (int)length).Sort((x, y) => comparer.Compare(x, y) ? -1 : 0);
+        new Span<T>(start, (int)length).Sort((x, y) => comparer.Compare(x, y));
     }
 
-    public interface IComparer<T>
-    {
-        bool Compare(T x, T y);
-    }
+    //public interface IComparer<T>
+    //{
+    //    bool Compare(T x, T y);
+    //}
 }

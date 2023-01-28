@@ -33,14 +33,17 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Versioning;
 using TerraFX.Interop.Windows;
 
 namespace SoftwareRasterizer;
 
 using static VectorMath;
+using static Intrinsics;
 using static Windows;
 using static VK;
 
+[SupportedOSPlatform("windows")]
 public static unsafe class Main
 {
     public const int WINDOW_WIDTH = 1280;
@@ -63,7 +66,7 @@ public static unsafe class Main
     static Rasterizer g_rasterizer;
 
     static HBITMAP g_hBitmap;
-    static List<Occluder> g_occluders;
+    static List<Occluder> g_occluders = new();
 
     static byte* g_rawData;
 
@@ -114,7 +117,7 @@ public static unsafe class Main
         ReadOnlySpan<uint> indices = CollectionsMarshal.AsSpan(indexList);
 
         int quadAabbCount = indices.Length / 4;
-        nuint quadAabbByteCount = (nuint)quadAabbCount * (uint)sizeof(Vector128<float>);
+        nuint quadAabbByteCount = (nuint)quadAabbCount * (uint)sizeof(Aabb);
         Aabb* quadAabbs = (Aabb*)NativeMemory.AlignedAlloc(quadAabbByteCount, (uint)sizeof(Vector128<float>));
         for (int quadIndex = 0; quadIndex < quadAabbCount; ++quadIndex)
         {
@@ -139,7 +142,7 @@ public static unsafe class Main
         foreach (SurfaceAreaHeuristic.Vector batch in batchAssignment)
         {
             Vector128<float>[] batchVertices = new Vector128<float>[batch.Length * 4];
-            for (int i = 0; i < batchVertices.Length; i++)
+            for (int i = 0; i < batch.Length; i++)
             {
                 uint quadIndex = batch.Start[i];
                 batchVertices[i * 4 + 0] = (vertices[(int)indices[(int)(quadIndex * 4 + 0)]]);
@@ -220,10 +223,21 @@ public static unsafe class Main
                 // Sort front to back
                 CollectionsMarshal.AsSpan(g_occluders).Sort((o1, o2) =>
                 {
-                    Vector128<float> dist1 = _mm_sub_ps(o1.m_center, g_cameraPosition);
-                    Vector128<float> dist2 = _mm_sub_ps(o2.m_center, g_cameraPosition);
+                    Vector128<float> dist1 = _mm_sub_ps(o1.m_center, g_cameraPosition.AsVector128());
+                    Vector128<float> dist2 = _mm_sub_ps(o2.m_center, g_cameraPosition.AsVector128());
 
-                    return _mm_comilt_ss(_mm_dp_ps(dist1, dist1, 0x7f), _mm_dp_ps(dist2, dist2, 0x7f));
+                    Vector128<float> a = _mm_dp_ps(dist1, dist1, 0x7f);
+                    Vector128<float> b = _mm_dp_ps(dist2, dist2, 0x7f);
+
+                    if (_mm_comilt_ss(a, b))
+                    {
+                        return -1;
+                    }
+                    if (_mm_comigt_ss(a, b))
+                    {
+                        return 1;
+                    }
+                    return 0;
                 });
 
                 foreach (Occluder occluder in g_occluders)
@@ -253,6 +267,9 @@ public static unsafe class Main
 
                 //std::nth_element(samples.begin(), samples.begin() + samples.size() / 2, samples.end());
                 double median = samples[samples.Count / 2];
+
+                if (samples.Count > 100)
+                    samples.Clear();
 
                 int fps = (int)(1000.0f / avgRasterTime);
 

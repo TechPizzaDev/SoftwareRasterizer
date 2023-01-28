@@ -14,9 +14,11 @@ using System.Runtime.Intrinsics;
 
 namespace SoftwareRasterizer;
 
+using static Intrinsics;
+
 public static unsafe class SurfaceAreaHeuristic
 {
-    private readonly struct AabbComparer : StableSort.IComparer<uint>
+    private readonly struct AabbComparer : IComparer<uint>
     {
         public readonly Aabb* aabbs;
         public readonly uint mask;
@@ -27,9 +29,22 @@ public static unsafe class SurfaceAreaHeuristic
             this.mask = mask;
         }
 
-        public bool Compare(uint x, uint y)
+        public int Compare(uint x, uint y)
         {
-            return (_mm_movemask_ps(_mm_cmplt_ps(aabbs[x].getCenter(), aabbs[y].getCenter())) & mask) != 0;
+            Vector128<float> aabbX = aabbs[x].getCenter();
+            Vector128<float> aabbY = aabbs[y].getCenter();
+
+            if ((_mm_movemask_ps(_mm_cmplt_ps(aabbX, aabbY)) & mask) != 0)
+            {
+                return -1;
+            }
+
+            if ((_mm_movemask_ps(_mm_cmpgt_ps(aabbX, aabbY)) & mask) != 0)
+            {
+                return 1;
+            }
+
+            return 0;
         }
     }
 

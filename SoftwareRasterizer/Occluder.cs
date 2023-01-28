@@ -15,6 +15,7 @@ using System.Runtime.Intrinsics;
 namespace SoftwareRasterizer;
 
 using static VectorMath;
+using static Intrinsics;
 
 public unsafe class Occluder
 {
