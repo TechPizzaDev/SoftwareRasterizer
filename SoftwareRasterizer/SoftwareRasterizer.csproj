@@ -8,14 +8,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <Compile Remove="*.h" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <None Include="*.h" />
-    </ItemGroup>
-
-    <ItemGroup>
         <PackageReference Include="TerraFX.Interop.Windows" Version="10.0.22621" />
     </ItemGroup>
 

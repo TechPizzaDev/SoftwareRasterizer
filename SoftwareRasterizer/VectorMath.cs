@@ -1,18 +1,11 @@
-/*
-#pragma once
-
-#include <smmintrin.h>
-*/
-
 using System.Runtime.Intrinsics;
 using System.Runtime.CompilerServices;
 using System.Numerics;
 using System;
 using System.Diagnostics;
+using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
-
-using static Intrinsics;
 
 public static unsafe class VectorMath
 {
@@ -20,38 +13,38 @@ public static unsafe class VectorMath
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> cross(Vector128<float> a, Vector128<float> b)
     {
-        Vector128<float> a_yzx = _mm_shuffle_ps(a, a, 0b11_00_10_01);
-        Vector128<float> b_yzx = _mm_shuffle_ps(b, b, 0b11_00_10_01);
-        Vector128<float> c = _mm_sub_ps(_mm_mul_ps(a, b_yzx), _mm_mul_ps(a_yzx, b));
-        return _mm_shuffle_ps(c, c, 0b11_00_10_01);
+        Vector128<float> a_yzx = Sse.Shuffle(a, a, 0b11_00_10_01);
+        Vector128<float> b_yzx = Sse.Shuffle(b, b, 0b11_00_10_01);
+        Vector128<float> c = Sse.Subtract(Sse.Multiply(a, b_yzx), Sse.Multiply(a_yzx, b));
+        return Sse.Shuffle(c, c, 0b11_00_10_01);
     }
 
     // Normal vector of triangle
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> normal(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2)
     {
-        return cross(_mm_sub_ps(v1, v0), _mm_sub_ps(v2, v0));
+        return cross(Sse.Subtract(v1, v0), Sse.Subtract(v2, v0));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> normalize(Vector128<float> v)
     {
-        return _mm_mul_ps(v, _mm_rsqrt_ps(_mm_dp_ps(v, v, 0x7F)));
+        return Sse.Multiply(v, Sse.ReciprocalSqrt(Sse41.DotProduct(v, v, 0x7F)));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void _MM_TRANSPOSE4_PS(
         ref Vector128<float> row0, ref Vector128<float> row1, ref Vector128<float> row2, ref Vector128<float> row3)
     {
-        Vector128<float> _Tmp0 = _mm_shuffle_ps((row0), (row1), 0x44);
-        Vector128<float> _Tmp2 = _mm_shuffle_ps((row0), (row1), 0xEE);
-        Vector128<float> _Tmp1 = _mm_shuffle_ps((row2), (row3), 0x44);
-        Vector128<float> _Tmp3 = _mm_shuffle_ps((row2), (row3), 0xEE);
+        Vector128<float> _Tmp0 = Sse.Shuffle(row0, row1, 0x44);
+        Vector128<float> _Tmp2 = Sse.Shuffle(row0, row1, 0xEE);
+        Vector128<float> _Tmp1 = Sse.Shuffle(row2, row3, 0x44);
+        Vector128<float> _Tmp3 = Sse.Shuffle(row2, row3, 0xEE);
 
-        (row0) = _mm_shuffle_ps(_Tmp0, _Tmp1, 0x88);
-        (row1) = _mm_shuffle_ps(_Tmp0, _Tmp1, 0xDD);
-        (row2) = _mm_shuffle_ps(_Tmp2, _Tmp3, 0x88);
-        (row3) = _mm_shuffle_ps(_Tmp2, _Tmp3, 0xDD);
+        row0 = Sse.Shuffle(_Tmp0, _Tmp1, 0x88);
+        row1 = Sse.Shuffle(_Tmp0, _Tmp1, 0xDD);
+        row2 = Sse.Shuffle(_Tmp2, _Tmp3, 0x88);
+        row3 = Sse.Shuffle(_Tmp2, _Tmp3, 0xDD);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -135,8 +128,8 @@ public struct Aabb
 {
     public Aabb()
     {
-        m_min = _mm_set1_ps(float.PositiveInfinity);
-        m_max = _mm_set1_ps(float.NegativeInfinity);
+        m_min = Vector128.Create(float.PositiveInfinity);
+        m_max = Vector128.Create(float.NegativeInfinity);
     }
 
     public Vector128<float> m_min;
@@ -144,30 +137,30 @@ public struct Aabb
 
     public void include(in Aabb aabb)
     {
-        m_min = _mm_min_ps(m_min, aabb.m_min);
-        m_max = _mm_max_ps(m_max, aabb.m_max);
+        m_min = Sse.Min(m_min, aabb.m_min);
+        m_max = Sse.Max(m_max, aabb.m_max);
     }
 
     public void include(Vector128<float> point)
     {
-        m_min = _mm_min_ps(m_min, point);
-        m_max = _mm_max_ps(m_max, point);
+        m_min = Sse.Min(m_min, point);
+        m_max = Sse.Max(m_max, point);
     }
 
     public readonly Vector128<float> getCenter()
     {
-        return _mm_add_ps(m_min, m_max);
+        return Sse.Add(m_min, m_max);
     }
 
     public readonly Vector128<float> getExtents()
     {
-        return _mm_sub_ps(m_max, m_min);
+        return Sse.Subtract(m_max, m_min);
     }
 
     public readonly Vector128<float> surfaceArea()
     {
         Vector128<float> extents = getExtents();
-        Vector128<float> extents2 = _mm_shuffle_ps(extents, extents, 0b11_00_10_01);
-        return _mm_dp_ps(extents, extents2, 0x7F);
+        Vector128<float> extents2 = Sse.Shuffle(extents, extents, 0b11_00_10_01);
+        return Sse41.DotProduct(extents, extents2, 0x7F);
     }
 }

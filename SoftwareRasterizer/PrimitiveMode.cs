@@ -1,14 +1,4 @@
-﻿/*
-#include "Rasterizer.h"
-
-#include "Occluder.h"
-
-#include <algorithm>
-#include <cassert>
-#include <cmath>
-*/
-
-namespace SoftwareRasterizer;
+﻿namespace SoftwareRasterizer;
 
 public enum PrimitiveMode : byte
 {

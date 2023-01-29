@@ -1,28 +1,13 @@
-/*
-#include "QuadDecomposition.h"
-
-#include "VectorMath.h"
-
-#include <algorithm>
-#include <cassert>
-#include <numeric>
-#include <queue>
-#include <random>
-#include <tuple>
-#include <unordered_map>
-#include <vector>
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
 
 using static VectorMath;
-using static Intrinsics;
 
 using Vertex = Int32;
 
@@ -360,10 +345,10 @@ public static unsafe class QuadDecomposition
         Vector128<float> n0 = normalize(normal(v0, v1, v2));
         Vector128<float> n2 = normalize(normal(v2, v3, v0));
 
-        Vector128<float> planeDistA = _mm_andnot_ps(_mm_set1_ps(-0.0f), _mm_dp_ps(n0, _mm_sub_ps(v1, v3), 0x7F));
-        Vector128<float> planeDistB = _mm_andnot_ps(_mm_set1_ps(-0.0f), _mm_dp_ps(n2, _mm_sub_ps(v1, v3), 0x7F));
+        Vector128<float> planeDistA = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n0, Sse.Subtract(v1, v3), 0x7F));
+        Vector128<float> planeDistB = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n2, Sse.Subtract(v1, v3), 0x7F));
 
-        if (_mm_comigt_ss(planeDistA, _mm_set1_ps(maximumDepthError)) || _mm_comigt_ss(planeDistB, _mm_set1_ps(maximumDepthError)))
+        if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(maximumDepthError)) || Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.Create(maximumDepthError)))
         {
             return false;
         }

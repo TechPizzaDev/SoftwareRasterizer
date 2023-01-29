@@ -1,29 +1,3 @@
-/*
-#include "Occluder.h"
-#include "QuadDecomposition.h"
-#include "Rasterizer.h"
-#include "SurfaceAreaHeuristic.h"
-#include "VectorMath.h"
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-
-#include <DirectXMath.h>
-#include <Windows.h>
-
-#include <algorithm>
-#include <chrono>
-#include <fstream>
-#include <iomanip>
-#include <memory>
-#include <numeric>
-#include <sstream>
-#include <vector>
-#include <thread>
-
-using namespace DirectX;
-*/
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -33,13 +7,13 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
 using System.Runtime.Versioning;
 using TerraFX.Interop.Windows;
 
 namespace SoftwareRasterizer;
 
 using static VectorMath;
-using static Intrinsics;
 using static Windows;
 using static VK;
 
@@ -145,10 +119,10 @@ public static unsafe class Main
             for (int i = 0; i < batch.Length; i++)
             {
                 uint quadIndex = batch.Start[i];
-                batchVertices[i * 4 + 0] = (vertices[(int)indices[(int)(quadIndex * 4 + 0)]]);
-                batchVertices[i * 4 + 1] = (vertices[(int)indices[(int)(quadIndex * 4 + 1)]]);
-                batchVertices[i * 4 + 2] = (vertices[(int)indices[(int)(quadIndex * 4 + 2)]]);
-                batchVertices[i * 4 + 3] = (vertices[(int)indices[(int)(quadIndex * 4 + 3)]]);
+                batchVertices[i * 4 + 0] = vertices[(int)indices[(int)(quadIndex * 4 + 0)]];
+                batchVertices[i * 4 + 1] = vertices[(int)indices[(int)(quadIndex * 4 + 1)]];
+                batchVertices[i * 4 + 2] = vertices[(int)indices[(int)(quadIndex * 4 + 2)]];
+                batchVertices[i * 4 + 3] = vertices[(int)indices[(int)(quadIndex * 4 + 3)]];
             }
 
             g_occluders.Add(Occluder.bake(batchVertices, refAabb.m_min, refAabb.m_max));
@@ -221,25 +195,8 @@ public static unsafe class Main
                 g_rasterizer.setModelViewProjection(mvp);
 
                 // Sort front to back
-                CollectionsMarshal.AsSpan(g_occluders).Sort((o1, o2) =>
-                {
-                    Vector128<float> dist1 = _mm_sub_ps(o1.m_center, g_cameraPosition.AsVector128());
-                    Vector128<float> dist2 = _mm_sub_ps(o2.m_center, g_cameraPosition.AsVector128());
-
-                    Vector128<float> a = _mm_dp_ps(dist1, dist1, 0x7f);
-                    Vector128<float> b = _mm_dp_ps(dist2, dist2, 0x7f);
-
-                    if (_mm_comilt_ss(a, b))
-                    {
-                        return -1;
-                    }
-                    if (_mm_comigt_ss(a, b))
-                    {
-                        return 1;
-                    }
-                    return 0;
-                });
-
+                Algo.sort(CollectionsMarshal.AsSpan(g_occluders), new OccluderComparer(g_cameraPosition.AsVector128()));
+                
                 foreach (Occluder occluder in g_occluders)
                 {
                     if (g_rasterizer.queryVisibility(occluder.m_boundsMin, occluder.m_boundsMax, out bool needsClipping))
@@ -358,5 +315,26 @@ public static unsafe class Main
                 return DefWindowProc(hWnd, message, wParam, lParam);
         }
         return 0;
+    }
+
+    readonly struct OccluderComparer : Algo.IComparer<Occluder>
+    {
+        public readonly Vector128<float> CameraPosition;
+
+        public OccluderComparer(Vector128<float> cameraPosition)
+        {
+            CameraPosition = cameraPosition;
+        }
+
+        public bool Compare(Occluder x, Occluder y)
+        {
+            Vector128<float> dist1 = Sse.Subtract(x.m_center, g_cameraPosition.AsVector128());
+            Vector128<float> dist2 = Sse.Subtract(y.m_center, g_cameraPosition.AsVector128());
+
+            Vector128<float> a = Sse41.DotProduct(dist1, dist1, 0x7f);
+            Vector128<float> b = Sse41.DotProduct(dist2, dist2, 0x7f);
+
+            return Sse.CompareScalarOrderedLessThan(a, b);
+        }
     }
 }
