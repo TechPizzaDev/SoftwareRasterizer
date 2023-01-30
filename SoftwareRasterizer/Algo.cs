@@ -445,7 +445,8 @@ public static unsafe class Algo
                 (--_Last).Set(_Right_last.Get());
                 --_Right_last;
                 if (_Right_first == _Right_last)
-                { // we can't compare with *_Right_first, but we know it is lowest
+                {
+                    // we can't compare with *_Right_first, but we know it is lowest
                     (--_Last).Set(_Mid.Get()); // restore half-open range [_First, _Mid)
                     _Move_backward_unchecked(_First, _Mid, _Last);
                     _First.Set(_Right_first.Get());
@@ -534,7 +535,8 @@ public static unsafe class Algo
         nuint _Count = Ref<TItem>.Distance(_UFirst, _Last);
 
         while (0 < _Count)
-        { // divide and conquer, find half that contains answer
+        { 
+            // divide and conquer, find half that contains answer
             nuint _Count2 = _Count / 2;
             Ref<TItem> _UMid = _UFirst + _Count2;
             if (_Pred.Compare(_Val, _UMid.Get()))
@@ -542,7 +544,8 @@ public static unsafe class Algo
                 _Count = _Count2;
             }
             else
-            { // try top half
+            { 
+                // try top half
                 _UFirst = _UMid + 1;
                 _Count -= _Count2 + 1;
             }
@@ -578,13 +581,13 @@ public static unsafe class Algo
             _Count2 - _Count2n, _Temp_ptr, _Capacity, _Pred);
     }
 
-    private static Ref<TItem> _Buffered_rotate_unchecked<TItem>(
-        Ref<TItem> _First,
-        Ref<TItem> _Mid,
-        Ref<TItem> _Last,
+    private static Ref<T> _Buffered_rotate_unchecked<T>(
+        Ref<T> _First,
+        Ref<T> _Mid,
+        Ref<T> _Last,
         nuint _Count1,
         nuint _Count2,
-        Ref<TItem> _Temp_ptr,
+        Ref<T> _Temp_ptr,
         nuint _Capacity)
     {
         // rotate [_First, _Last) using temp buffer
@@ -603,9 +606,9 @@ public static unsafe class Algo
         if (_Count1 <= _Count2 && _Count1 <= _Capacity)
         {
             // buffer left range, then copy parts
-            _Uninitialized_backout<TItem> _Backout = new(
+            _Uninitialized_backout<T> _Backout = new(
                 _Temp_ptr, _Uninitialized_move_unchecked(_First, _Mid, _Temp_ptr));
-            Ref<TItem> _New_mid = _Move_unchecked(_Mid, _Last, _First);
+            Ref<T> _New_mid = _Move_unchecked(_Mid, _Last, _First);
             _Move_unchecked(_Backout._First, _Backout._Last, _New_mid);
             return _New_mid; // _Backout destroys elements in temporary buffer
         }
@@ -613,7 +616,7 @@ public static unsafe class Algo
         if (_Count2 <= _Capacity)
         {
             // buffer right range, then copy parts
-            _Uninitialized_backout<TItem> _Backout = new(
+            _Uninitialized_backout<T> _Backout = new(
                 _Temp_ptr, _Uninitialized_move_unchecked(_Mid, _Last, _Temp_ptr));
             _Move_backward_unchecked(_First, _Mid, _Last);
             return _Move_unchecked(_Backout._First, _Backout._Last, _First); // ditto _Backout destroys elements
@@ -623,10 +626,10 @@ public static unsafe class Algo
         return rotate(_First, _Mid, _Last);
     }
 
-    private static Ref<_FwdIt> rotate<_FwdIt>(
-        Ref<_FwdIt> _First,
-        Ref<_FwdIt> _Mid,
-        Ref<_FwdIt> _Last)
+    private static Ref<T> rotate<T>(
+        Ref<T> _First,
+        Ref<T> _Mid,
+        Ref<T> _Last)
     {
         // exchange the ranges [_First, _Mid) and [_Mid, _Last)
         // that is, rotates [_First, _Last) left by distance(_First, _Mid) positions
@@ -646,56 +649,20 @@ public static unsafe class Algo
             return _First;
         }
 
-        if (true)
-        {
-            reverse(_UFirst, _UMid);
-            reverse(_UMid, _ULast);
-            reverse(_UFirst, _ULast);
-            _First = _UFirst + Ref<_FwdIt>.Distance(_UMid, _ULast);
-        }
-        else
-        {
-            var _UNext = _UMid;
-            do
-            {
-                // rotate the first cycle
-                swap(_UFirst, _UNext);
-                ++_UFirst;
-                ++_UNext;
-                if (_UFirst == _UMid)
-                {
-                    _UMid = _UNext;
-                }
-            }
-            while (_UNext != _ULast);
-            _First = _UFirst;
-            while (_UMid != _ULast)
-            {
-                // rotate subsequent cycles
-                _UNext = _UMid;
-                do
-                {
-                    swap(_UFirst, _UNext);
-                    ++_UFirst;
-                    ++_UNext;
-                    if (_UFirst == _UMid)
-                    {
-                        _UMid = _UNext;
-                    }
-                }
-                while (_UNext != _ULast);
-            }
-        }
+        reverse(_UFirst, _UMid);
+        reverse(_UMid, _ULast);
+        reverse(_UFirst, _ULast);
+        _First = _UFirst + Ref<T>.Distance(_UMid, _ULast);
 
         return _First;
     }
 
-    private static void reverse<_BidIt>(Ref<_BidIt> _First, Ref<_BidIt> _Last)
+    private static void reverse<T>(Ref<T> _First, Ref<T> _Last)
     {
         // reverse elements in [_First, _Last)
         _Adl_verify_range(_First, _Last);
-        Ref<_BidIt> _UFirst = _First;
-        Ref<_BidIt> _ULast = _Last;
+        Ref<T> _UFirst = _First;
+        Ref<T> _ULast = _Last;
 
         for (; _UFirst != _ULast && _UFirst != --_ULast; ++_UFirst)
         {
@@ -710,7 +677,7 @@ public static unsafe class Algo
         _Right.Set(left);
     }
 
-    private static Ref<TItem> _Uninitialized_move_unchecked<TItem>(Ref<TItem> _First, Ref<TItem> _Last, Ref<TItem> _Dest)
+    private static Ref<T> _Uninitialized_move_unchecked<T>(Ref<T> _First, Ref<T> _Last, Ref<T> _Dest)
     {
         // move [_First, _Last) to raw [_Dest, ...)
 
@@ -720,7 +687,7 @@ public static unsafe class Algo
         //    return _Copy_memmove(_First, _Last, _Dest);
         //}
 
-        _Uninitialized_backout<TItem> _Backout = new(_Dest);
+        _Uninitialized_backout<T> _Backout = new(_Dest);
         for (; _First != _Last; ++_First)
         {
             _Backout._Emplace_back(_First.Get());
@@ -782,10 +749,7 @@ public static unsafe class Algo
         return _Last;
     }
 
-    private static Ref<T> _Move_backward_unchecked<T>(
-        Ref<T> _First,
-        Ref<T> _Last,
-        Ref<T> _Dest)
+    private static Ref<T> _Move_backward_unchecked<T>(Ref<T> _First, Ref<T> _Last, Ref<T> _Dest)
     {
         // move [_First, _Last) backwards to [..., _Dest)
         // note: _Move_backward_unchecked has callers other than the move_backward family
@@ -828,7 +792,12 @@ public static unsafe class Algo
     {
         if (Unsafe.IsAddressLessThan(ref last.Value, ref first.Value))
         {
-            throw new ArgumentException("The last element comes before the first.");
+            static void Throw()
+            {
+                throw new ArgumentException("The last reference is before the first.");
+            }
+
+            Throw();
         }
     }
 
@@ -847,15 +816,6 @@ public static unsafe class Algo
             _First = _First_;
             _Last = _Last_;
         }
-
-        //    _Uninitialized_backout(const _Uninitialized_backout&)            = delete;
-        //
-        //_Uninitialized_backout& operator=(const _Uninitialized_backout&) = delete;
-        //
-        //_CONSTEXPR20 ~_Uninitialized_backout()
-        //    {
-        //        _Destroy_range(_First, _Last);
-        //    }
 
         public void _Emplace_back(TItem _Vals)
         {
