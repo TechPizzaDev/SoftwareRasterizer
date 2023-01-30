@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -11,9 +12,9 @@ public static unsafe class SurfaceAreaHeuristic
     private readonly struct AabbComparer : Algo.IComparer<uint>
     {
         public readonly Aabb* aabbs;
-        public readonly uint mask;
+        public readonly int mask;
 
-        public AabbComparer(Aabb* aabbs, uint mask)
+        public AabbComparer(Aabb* aabbs, int mask)
         {
             this.aabbs = aabbs;
             this.mask = mask;
@@ -23,7 +24,6 @@ public static unsafe class SurfaceAreaHeuristic
         {
             Vector128<float> aabbX = aabbs[x].getCenter();
             Vector128<float> aabbY = aabbs[y].getCenter();
-
             return (Sse.MoveMask(Sse.CompareLessThan(aabbX, aabbY)) & mask) != 0;
         }
     }
@@ -48,7 +48,7 @@ public static unsafe class SurfaceAreaHeuristic
         for (int splitAxis = 0; splitAxis < 3; ++splitAxis)
         {
             // Sort along center position
-            Algo.stable_sort(ref *indicesStart, ref *indicesEnd, new AabbComparer(aabbsIn, 1u << bestAxis));
+            Algo.stable_sort(Ref<uint>.FromPtr(indicesStart), Ref<uint>.FromPtr(indicesEnd), new AabbComparer(aabbsIn, 1 << splitAxis));
 
             Aabb fromLeft = new();
             for (uint i = 0; i < numIndices; ++i)
@@ -89,7 +89,7 @@ public static unsafe class SurfaceAreaHeuristic
         NativeMemory.AlignedFree(areasFromRight);
 
         // Sort again according to best axis
-        Algo.stable_sort(ref *indicesStart, ref *indicesEnd, new AabbComparer(aabbsIn, 1u << bestAxis));
+        Algo.stable_sort(Ref<uint>.FromPtr(indicesStart), Ref<uint>.FromPtr(indicesEnd), new AabbComparer(aabbsIn, 1 << bestAxis));
 
         return bestIndex;
     }
@@ -136,6 +136,7 @@ public static unsafe class SurfaceAreaHeuristic
         NativeMemory.Free(ptr);
     }
 
+    [DebuggerDisplay($"{{{nameof(GetDebuggerDisplay)}(),nq}}")]
     public readonly struct Vector
     {
         public readonly uint* Start;
@@ -147,6 +148,11 @@ public static unsafe class SurfaceAreaHeuristic
         {
             Start = start;
             End = end;
+        }
+
+        private string GetDebuggerDisplay()
+        {
+            return "Length = " + Length;
         }
     }
 }

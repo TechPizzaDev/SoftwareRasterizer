@@ -389,7 +389,13 @@ public unsafe partial class Rasterizer
                     Vector256<int> depthI256 = Avx2.ShiftLeftLogical(Avx2.ConvertToVector256Int32(depthI.AsUInt16()), 12);
                     Vector256<float> depth = Avx.Multiply(depthI256.AsSingle(), Vector256.Create(bias));
 
-                    Vector256<float> linDepth = Avx.Divide(Vector256.Create(2 * 0.25f), Avx.Subtract(Vector256.Create(0.25f + 1000.0f), Avx.Multiply(Avx.Subtract(Vector256.Create(1.0f), depth), Vector256.Create(1000.0f - 0.25f))));
+                    Vector256<float> linDepth = Avx.Divide(
+                        Vector256.Create(2 * 0.25f), 
+                        Avx.Subtract(
+                            Vector256.Create(0.25f + 1000.0f), 
+                            Avx.Multiply(
+                                Avx.Subtract(Vector256.Create(1.0f), depth),
+                                Vector256.Create(1000.0f - 0.25f))));
 
                     Avx.Store(linDepthA, linDepth);
 
@@ -399,7 +405,7 @@ public unsafe partial class Rasterizer
                         uint d = (uint)(100 * 256 * l);
                         byte v0 = (byte)(d / 100);
                         byte v1 = (byte)(d % 256);
-
+                        
                         dest[4 * x + 0] = v0;
                         dest[4 * x + 1] = v1;
                         dest[4 * x + 2] = 0;
@@ -781,15 +787,16 @@ public unsafe partial class Rasterizer
             }
 
             // Round to integer coordinates to improve culling of zero-area triangles
-            Vector256<float> x0 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X0, invW0)), Vector256.Create(0.125f));
-            Vector256<float> x1 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X1, invW1)), Vector256.Create(0.125f));
-            Vector256<float> x2 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X2, invW2)), Vector256.Create(0.125f));
-            Vector256<float> x3 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X3, invW3)), Vector256.Create(0.125f));
+            Vector256<float> roundFactor = Vector256.Create(0.125f);
+            Vector256<float> x0 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X0, invW0)), roundFactor);
+            Vector256<float> x1 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X1, invW1)), roundFactor);
+            Vector256<float> x2 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X2, invW2)), roundFactor);
+            Vector256<float> x3 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(X3, invW3)), roundFactor);
 
-            Vector256<float> y0 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y0, invW0)), Vector256.Create(0.125f));
-            Vector256<float> y1 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y1, invW1)), Vector256.Create(0.125f));
-            Vector256<float> y2 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y2, invW2)), Vector256.Create(0.125f));
-            Vector256<float> y3 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y3, invW3)), Vector256.Create(0.125f));
+            Vector256<float> y0 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y0, invW0)), roundFactor);
+            Vector256<float> y1 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y1, invW1)), roundFactor);
+            Vector256<float> y2 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y2, invW2)), roundFactor);
+            Vector256<float> y3 = Avx.Multiply(Avx.RoundToNearestInteger(Avx.Multiply(Y3, invW3)), roundFactor);
 
             // Compute unnormalized edge directions
             Vector256<float> edgeNormalsX0 = Avx.Subtract(y1, y0);
@@ -984,21 +991,23 @@ public unsafe partial class Rasterizer
 
             // Check overlap between bounding box and frustum
             Vector256<int> inFrustum = Avx2.And(Avx2.CompareGreaterThan(maxX, minX), Avx2.CompareGreaterThan(maxY, minY));
-            primitiveValid = Avx2.And(inFrustum, primitiveValid);
+            Vector256<int> overlappedPrimitiveValid = Avx2.And(inFrustum, primitiveValid);
 
-            if (Avx.TestZ(primitiveValid, primitiveValid))
+            if (Avx.TestZ(overlappedPrimitiveValid, overlappedPrimitiveValid))
             {
                 continue;
             }
+
+            uint validMask = (uint)Avx.MoveMask(overlappedPrimitiveValid.AsSingle());
 
             // Convert bounds from [min, max] to [min, range]
             Vector256<int> rangeX = Avx2.Subtract(maxX, minX);
             Vector256<int> rangeY = Avx2.Subtract(maxY, minY);
 
             // Compute Z from linear relation with 1/W
-            Vector256<float> z0, z1, z2, z3;
             Vector256<float> C0 = Avx.BroadcastScalarToVector256(&c0);
             Vector256<float> C1 = Avx.BroadcastScalarToVector256(&c1);
+            Vector256<float> z0, z1, z2, z3;
             z0 = Fma.MultiplyAdd(invW0, C1, C0);
             z1 = Fma.MultiplyAdd(invW1, C1, C0);
             z2 = Fma.MultiplyAdd(invW2, C1, C0);
@@ -1125,213 +1134,248 @@ public unsafe partial class Rasterizer
 
             transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, slopeLookups);
 
-            uint validMask = (uint)Avx.MoveMask(primitiveValid.AsSingle());
+            rasterizeLoop<T>(
+                validMask,
+                depthBounds,
+                depthPlane,
+                slopeLookups,
+                edgeNormalsX,
+                edgeNormalsY,
+                edgeOffsets,
+                firstBlocks,
+                rangesX,
+                rangesY,
+                primModes);
+        }
+    }
 
-            // Fetch data pointers since we'll manually strength-reduce memory arithmetic
-            ulong* pTable = m_precomputedRasterTables;
-            ushort* pHiZBuffer = m_hiZ;
-            Vector128<int>* pDepthBuffer = m_depthBuffer;
+    private void rasterizeLoop<T>(
+        uint validMask,
+        ushort* depthBounds,
+        Vector128<float>* depthPlane,
+        Vector128<int>* slopeLookups,
+        Vector128<float>* edgeNormalsX,
+        Vector128<float>* edgeNormalsY,
+        Vector128<float>* edgeOffsets,
+        uint* firstBlocks,
+        uint* rangesX,
+        uint* rangesY,
+        uint* primModes)
+        where T : IPossiblyNearClipped
+    {
+        // Fetch data pointers since we'll manually strength-reduce memory arithmetic
+        ulong* pTable = m_precomputedRasterTables;
+        ushort* pHiZBuffer = m_hiZ;
+        Vector128<int>* pDepthBuffer = m_depthBuffer;
 
-            // Loop over set bits
-            while (validMask != 0)
+        const float depthSamplePos = -0.5f + 1.0f / 16.0f;
+
+        Vector256<float> depthSamplePosFactor1 = Vector256.Create(
+            depthSamplePos + 0.0f, depthSamplePos + 0.125f, depthSamplePos + 0.25f, depthSamplePos + 0.375f,
+            depthSamplePos + 0.0f, depthSamplePos + 0.125f, depthSamplePos + 0.25f, depthSamplePos + 0.375f);
+
+        Vector256<float> depthSamplePosFactor2 = Vector256.Create(
+            depthSamplePos + 0.0f, depthSamplePos + 0.0f, depthSamplePos + 0.0f, depthSamplePos + 0.0f,
+            depthSamplePos + 0.125f, depthSamplePos + 0.125f, depthSamplePos + 0.125f, depthSamplePos + 0.125f);
+
+        // Loop over set bits
+        while (validMask != 0)
+        {
+            uint primitiveIdx = (uint)BitOperations.TrailingZeroCount(validMask);
+
+            // Clear lowest set bit in mask
+            validMask &= validMask - 1;
+
+            uint primitiveIdxTransposed = ((primitiveIdx << 1) & 7) | (primitiveIdx >> 2);
+
+            // Extract and prepare per-primitive data
+            ushort primitiveMaxZ = depthBounds[primitiveIdx];
+
+            Vector256<float> depthDx = Avx2.BroadcastScalarToVector256(Avx.Permute(Sse.LoadAlignedVector128((float*)(depthPlane + primitiveIdxTransposed)), 0b01_01_01_01));
+            Vector256<float> depthDy = Avx2.BroadcastScalarToVector256(Avx.Permute(Sse.LoadAlignedVector128((float*)(depthPlane + primitiveIdxTransposed)), 0b10_10_10_10));
+
+            Vector256<float> lineDepth =
+              Fma.MultiplyAdd(depthDx, depthSamplePosFactor1,
+                Fma.MultiplyAdd(depthDy, depthSamplePosFactor2,
+                  Avx2.BroadcastScalarToVector256(depthPlane[primitiveIdxTransposed])));
+
+            Vector128<int> slopeLookup = Sse2.LoadAlignedVector128((int*)(slopeLookups + primitiveIdxTransposed));
+            Vector128<float> edgeNormalX = Sse.LoadAlignedVector128((float*)(edgeNormalsX + primitiveIdxTransposed));
+            Vector128<float> edgeNormalY = Sse.LoadAlignedVector128((float*)(edgeNormalsY + primitiveIdxTransposed));
+            Vector128<float> lineOffset = Sse.LoadAlignedVector128((float*)(edgeOffsets + primitiveIdxTransposed));
+
+            uint blocksX = m_blocksX;
+
+            uint firstBlock = firstBlocks[primitiveIdx];
+            uint blockRangeX = rangesX[primitiveIdx];
+            uint blockRangeY = rangesY[primitiveIdx];
+
+            ushort* pPrimitiveHiZ = pHiZBuffer + firstBlock;
+            Vector256<int>* pPrimitiveOut = (Vector256<int>*)pDepthBuffer + 4 * firstBlock;
+
+            uint primitiveMode = primModes[primitiveIdx];
+
+            for (uint blockY = 0;
+              blockY < blockRangeY;
+              ++blockY,
+              pPrimitiveHiZ += blocksX,
+              pPrimitiveOut += 4 * blocksX,
+              lineDepth = Avx.Add(lineDepth, depthDy),
+              lineOffset = Sse.Add(lineOffset, edgeNormalY))
             {
-                uint primitiveIdx = (uint)BitOperations.TrailingZeroCount(validMask);
+                ushort* pBlockRowHiZ = pPrimitiveHiZ;
+                Vector256<int>* @out = pPrimitiveOut;
 
-                // Clear lowest set bit in mask
-                validMask &= validMask - 1;
+                Vector128<float> offset = lineOffset;
+                Vector256<float> depth = lineDepth;
 
-                uint primitiveIdxTransposed = ((primitiveIdx << 1) & 7) | (primitiveIdx >> 2);
-
-                // Extract and prepare per-primitive data
-                ushort primitiveMaxZ = depthBounds[primitiveIdx];
-
-                Vector256<float> depthDx = Avx2.BroadcastScalarToVector256(Avx.Permute(depthPlane[primitiveIdxTransposed], 0b01_01_01_01));
-                Vector256<float> depthDy = Avx2.BroadcastScalarToVector256(Avx.Permute(depthPlane[primitiveIdxTransposed], 0b10_10_10_10));
-
-                const float depthSamplePos = -0.5f + 1.0f / 16.0f;
-                Vector256<float> lineDepth =
-                  Fma.MultiplyAdd(depthDx, Vector256.Create(depthSamplePos + 0.0f, depthSamplePos + 0.125f, depthSamplePos + 0.25f, depthSamplePos + 0.375f, depthSamplePos + 0.0f, depthSamplePos + 0.125f, depthSamplePos + 0.25f, depthSamplePos + 0.375f),
-                    Fma.MultiplyAdd(depthDy, Vector256.Create(depthSamplePos + 0.0f, depthSamplePos + 0.0f, depthSamplePos + 0.0f, depthSamplePos + 0.0f, depthSamplePos + 0.125f, depthSamplePos + 0.125f, depthSamplePos + 0.125f, depthSamplePos + 0.125f),
-                      Avx2.BroadcastScalarToVector256(depthPlane[primitiveIdxTransposed])));
-
-                Vector128<int> slopeLookup = slopeLookups[primitiveIdxTransposed];
-                Vector128<float> edgeNormalX = edgeNormalsX[primitiveIdxTransposed];
-                Vector128<float> edgeNormalY = edgeNormalsY[primitiveIdxTransposed];
-                Vector128<float> lineOffset = edgeOffsets[primitiveIdxTransposed];
-
-                uint blocksX = m_blocksX;
-
-                uint firstBlock = firstBlocks[primitiveIdx];
-                uint blockRangeX = rangesX[primitiveIdx];
-                uint blockRangeY = rangesY[primitiveIdx];
-
-                ushort* pPrimitiveHiZ = pHiZBuffer + firstBlock;
-                Vector256<int>* pPrimitiveOut = (Vector256<int>*)pDepthBuffer + 4 * firstBlock;
-
-                uint primitiveMode = primModes[primitiveIdx];
-
-                for (uint blockY = 0;
-                  blockY < blockRangeY;
-                  ++blockY,
-                  pPrimitiveHiZ += blocksX,
-                  pPrimitiveOut += 4 * blocksX,
-                  lineDepth = Avx.Add(lineDepth, depthDy),
-                  lineOffset = Sse.Add(lineOffset, edgeNormalY))
+                bool anyBlockHit = false;
+                for (uint blockX = 0;
+                  blockX < blockRangeX;
+                  ++blockX,
+                  pBlockRowHiZ += 1,
+                  @out += 4,
+                  depth = Avx.Add(depthDx, depth),
+                  offset = Sse.Add(edgeNormalX, offset))
                 {
-                    ushort* pBlockRowHiZ = pPrimitiveHiZ;
-                    Vector256<int>* @out = pPrimitiveOut;
-
-                    Vector128<float> offset = lineOffset;
-                    Vector256<float> depth = lineDepth;
-
-                    bool anyBlockHit = false;
-                    for (uint blockX = 0;
-                      blockX < blockRangeX;
-                      ++blockX,
-                      pBlockRowHiZ += 1,
-                      @out += 4,
-                      depth = Avx.Add(depthDx, depth),
-                      offset = Sse.Add(edgeNormalX, offset))
+                    ushort hiZ = *pBlockRowHiZ;
+                    if (hiZ >= primitiveMaxZ)
                     {
-                        ushort hiZ = *pBlockRowHiZ;
-                        if (hiZ >= primitiveMaxZ)
+                        continue;
+                    }
+
+                    ulong blockMask;
+                    if (primitiveMode == (uint)PrimitiveMode.Convex)    // 83-97%
+                    {
+                        // Simplified conservative test: combined block mask will be zero if any offset is outside of range
+                        Vector128<float> anyOffsetOutsideMask = Sse.CompareGreaterThanOrEqual(offset, Vector128.Create((float)(OFFSET_QUANTIZATION_FACTOR - 1)));
+                        if (!Avx.TestZ(anyOffsetOutsideMask, anyOffsetOutsideMask))
                         {
+                            if (anyBlockHit)
+                            {
+                                // Convexity implies we won't hit another block in this row and can skip to the next line.
+                                break;
+                            }
                             continue;
                         }
 
-                        ulong blockMask;
-                        if (primitiveMode == (uint)PrimitiveMode.Convex)    // 83-97%
+                        anyBlockHit = true;
+
+                        Vector128<int> offsetClamped = Sse41.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero);
+
+                        Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
+
+                        // Generate block mask
+                        ulong A = pTable[(uint)Sse2.ConvertToInt32(lookup)];
+                        ulong B = pTable[(uint)Sse41.Extract(lookup, 1)];
+                        ulong C = pTable[(uint)Sse41.Extract(lookup, 2)];
+                        ulong D = pTable[(uint)Sse41.Extract(lookup, 3)];
+
+                        blockMask = A & B & C & D;
+
+                        // It is possible but very unlikely that blockMask == 0 if all A,B,C,D != 0 according to the conservative test above, so we skip the additional branch here.
+                    }
+                    else
+                    {
+                        Vector128<int> offsetClamped = Sse41.Min(Sse41.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero), Vector128.Create(OFFSET_QUANTIZATION_FACTOR - 1));
+                        Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
+
+                        // Generate block mask
+                        ulong A = pTable[(uint)Sse2.ConvertToInt32(lookup)];
+                        ulong B = pTable[(uint)Sse41.Extract(lookup, 1)];
+                        ulong C = pTable[(uint)Sse41.Extract(lookup, 2)];
+                        ulong D = pTable[(uint)Sse41.Extract(lookup, 3)];
+
+                        // Switch over primitive mode. MSVC compiles this as a "sub eax, 1; jz label;" ladder, so the mode enum is ordered by descending frequency of occurence
+                        // to optimize branch efficiency. By ensuring we have a default case that falls through to the last possible value (ConcaveLeft if not near clipped,
+                        // ConcaveCenter otherwise) we avoid the last branch in the ladder.
+                        switch (primitiveMode)
                         {
-                            // Simplified conservative test: combined block mask will be zero if any offset is outside of range
-                            Vector128<float> anyOffsetOutsideMask = Sse.CompareGreaterThanOrEqual(offset, Vector128.Create((float)(OFFSET_QUANTIZATION_FACTOR - 1)));
-                            if (!Avx.TestZ(anyOffsetOutsideMask, anyOffsetOutsideMask))
-                            {
-                                if (anyBlockHit)
+                            case (uint)PrimitiveMode.Triangle0:             // 2.3-11%
+                                blockMask = A & B & C;
+                                break;
+
+                            case (uint)PrimitiveMode.Triangle1:             // 0.1-4%
+                                blockMask = A & C & D;
+                                break;
+
+                            case (uint)PrimitiveMode.ConcaveRight:          // 0.01-0.9%
+                                blockMask = (A | D) & B & C;
+                                break;
+
+                            default:
+                                // Case ConcaveCenter can only occur if any W < 0
+                                if (T.PossiblyNearClipped)
                                 {
-                                    // Convexity implies we won't hit another block in this row and can skip to the next line.
+                                    // case ConcaveCenter:			// < 1e-6%
+                                    blockMask = (A & B) | (C & D);
                                     break;
                                 }
-                                continue;
-                            }
+                                // Fall-through
+                                goto case (uint)PrimitiveMode.ConcaveLeft;
 
-                            anyBlockHit = true;
-
-                            Vector128<int> offsetClamped = Sse41.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero);
-
-                            Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
-
-                            // Generate block mask
-                            ulong A = pTable[(uint)Sse2.ConvertToInt32(lookup)];
-                            ulong B = pTable[(uint)Sse41.Extract(lookup, 1)];
-                            ulong C = pTable[(uint)Sse41.Extract(lookup, 2)];
-                            ulong D = pTable[(uint)Sse41.Extract(lookup, 3)];
-
-                            blockMask = A & B & C & D;
-
-                            // It is possible but very unlikely that blockMask == 0 if all A,B,C,D != 0 according to the conservative test above, so we skip the additional branch here.
+                            case (uint)PrimitiveMode.ConcaveLeft:           // 0.01-0.6%
+                                blockMask = A & D & (B | C);
+                                break;
                         }
-                        else
+
+                        // No pixels covered => skip block
+                        if (blockMask == 0)
                         {
-                            Vector128<int> offsetClamped = Sse41.Min(Sse41.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero), Vector128.Create(OFFSET_QUANTIZATION_FACTOR - 1));
-                            Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
-
-                            // Generate block mask
-                            ulong A = pTable[(uint)Sse2.ConvertToInt32(lookup)];
-                            ulong B = pTable[(uint)Sse41.Extract(lookup, 1)];
-                            ulong C = pTable[(uint)Sse41.Extract(lookup, 2)];
-                            ulong D = pTable[(uint)Sse41.Extract(lookup, 3)];
-
-                            // Switch over primitive mode. MSVC compiles this as a "sub eax, 1; jz label;" ladder, so the mode enum is ordered by descending frequency of occurence
-                            // to optimize branch efficiency. By ensuring we have a default case that falls through to the last possible value (ConcaveLeft if not near clipped,
-                            // ConcaveCenter otherwise) we avoid the last branch in the ladder.
-                            switch (primitiveMode)
-                            {
-                                case (uint)PrimitiveMode.Triangle0:             // 2.3-11%
-                                    blockMask = A & B & C;
-                                    break;
-
-                                case (uint)PrimitiveMode.Triangle1:             // 0.1-4%
-                                    blockMask = A & C & D;
-                                    break;
-
-                                case (uint)PrimitiveMode.ConcaveRight:          // 0.01-0.9%
-                                    blockMask = (A | D) & B & C;
-                                    break;
-
-                                default:
-                                    // Case ConcaveCenter can only occur if any W < 0
-                                    if (T.PossiblyNearClipped)
-                                    {
-                                        // case ConcaveCenter:			// < 1e-6%
-                                        blockMask = (A & B) | (C & D);
-                                        break;
-                                    }
-                                    // Fall-through
-                                    goto case (uint)PrimitiveMode.ConcaveLeft;
-
-                                case (uint)PrimitiveMode.ConcaveLeft:           // 0.01-0.6%
-                                    blockMask = A & D & (B | C);
-                                    break;
-                            }
-
-                            // No pixels covered => skip block
-                            if (blockMask == 0)
-                            {
-                                continue;
-                            }
+                            continue;
                         }
-
-                        // Generate depth values around block
-                        Vector256<float> depth0 = depth;
-                        Vector256<float> depth1 = Fma.MultiplyAdd(depthDx, Vector256.Create(0.5f), depth0);
-                        Vector256<float> depth8 = Avx.Add(depthDy, depth0);
-                        Vector256<float> depth9 = Avx.Add(depthDy, depth1);
-
-                        // Pack depth
-                        Vector256<int> d0 = packDepthPremultiplied(depth0, depth1);
-                        Vector256<int> d4 = packDepthPremultiplied(depth8, depth9);
-
-                        // Interpolate remaining values in packed space
-                        Vector256<int> d2 = Avx2.Average(d0.AsUInt16(), d4.AsUInt16()).AsInt32();
-                        Vector256<int> d1 = Avx2.Average(d0.AsUInt16(), d2.AsUInt16()).AsInt32();
-                        Vector256<int> d3 = Avx2.Average(d2.AsUInt16(), d4.AsUInt16()).AsInt32();
-
-                        // Not all pixels covered - mask depth 
-                        if (blockMask != 0xffff_ffff_ffff_ffff)
-                        {
-                            Vector128<int> A = Vector128.CreateScalar((long)blockMask).AsInt32();
-                            Vector128<int> B = Sse2.ShiftLeftLogical(A.AsInt16(), 4).AsInt32();
-                            Vector256<int> C = Avx2.InsertVector128(A.ToVector256Unsafe(), B, 1);
-                            Vector256<short> rowMask = Avx2.UnpackLow(C.AsByte(), C.AsByte()).AsInt16();
-
-                            d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), Avx2.ShiftLeftLogical(rowMask, 3).AsByte()).AsInt32();
-                            d1 = Avx2.BlendVariable(Vector256<byte>.Zero, d1.AsByte(), Avx2.ShiftLeftLogical(rowMask, 2).AsByte()).AsInt32();
-                            d2 = Avx2.BlendVariable(Vector256<byte>.Zero, d2.AsByte(), Avx2.Add(rowMask, rowMask).AsByte()).AsInt32();
-                            d3 = Avx2.BlendVariable(Vector256<byte>.Zero, d3.AsByte(), rowMask.AsByte()).AsInt32();
-                        }
-
-                        // Test fast clear flag
-                        if (hiZ != 1)
-                        {
-                            // Merge depth values
-                            d0 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 0)).AsUInt16(), d0.AsUInt16()).AsInt32();
-                            d1 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 1)).AsUInt16(), d1.AsUInt16()).AsInt32();
-                            d2 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 2)).AsUInt16(), d2.AsUInt16()).AsInt32();
-                            d3 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 3)).AsUInt16(), d3.AsUInt16()).AsInt32();
-                        }
-
-                        // Store back new depth
-                        Avx.StoreAligned((int*)(@out + 0), d0);
-                        Avx.StoreAligned((int*)(@out + 1), d1);
-                        Avx.StoreAligned((int*)(@out + 2), d2);
-                        Avx.StoreAligned((int*)(@out + 3), d3);
-
-                        // Update HiZ
-                        Vector256<int> newMinZ = Avx2.Min(Avx2.Min(d0.AsUInt16(), d1.AsUInt16()), Avx2.Min(d2.AsUInt16(), d3.AsUInt16())).AsInt32();
-                        Vector128<int> newMinZ16 = Sse41.MinHorizontal(Sse41.Min(newMinZ.GetLower().AsUInt16(), Avx2.ExtractVector128(newMinZ, 1).AsUInt16())).AsInt32();
-
-                        *pBlockRowHiZ = (ushort)(uint)Sse2.ConvertToInt32(newMinZ16);
                     }
+
+                    // Generate depth values around block
+                    Vector256<float> depth0 = depth;
+                    Vector256<float> depth1 = Fma.MultiplyAdd(depthDx, Vector256.Create(0.5f), depth0);
+                    Vector256<float> depth8 = Avx.Add(depthDy, depth0);
+                    Vector256<float> depth9 = Avx.Add(depthDy, depth1);
+
+                    // Pack depth
+                    Vector256<int> d0 = packDepthPremultiplied(depth0, depth1);
+                    Vector256<int> d4 = packDepthPremultiplied(depth8, depth9);
+
+                    // Interpolate remaining values in packed space
+                    Vector256<int> d2 = Avx2.Average(d0.AsUInt16(), d4.AsUInt16()).AsInt32();
+                    Vector256<int> d1 = Avx2.Average(d0.AsUInt16(), d2.AsUInt16()).AsInt32();
+                    Vector256<int> d3 = Avx2.Average(d2.AsUInt16(), d4.AsUInt16()).AsInt32();
+
+                    // Not all pixels covered - mask depth 
+                    if (blockMask != 0xffff_ffff_ffff_ffff)
+                    {
+                        Vector128<int> A = Vector128.CreateScalar((long)blockMask).AsInt32();
+                        Vector128<int> B = Sse2.ShiftLeftLogical(A.AsInt16(), 4).AsInt32();
+                        Vector256<int> C = Avx2.InsertVector128(A.ToVector256Unsafe(), B, 1);
+                        Vector256<short> rowMask = Avx2.UnpackLow(C.AsByte(), C.AsByte()).AsInt16();
+
+                        d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), Avx2.ShiftLeftLogical(rowMask, 3).AsByte()).AsInt32();
+                        d1 = Avx2.BlendVariable(Vector256<byte>.Zero, d1.AsByte(), Avx2.ShiftLeftLogical(rowMask, 2).AsByte()).AsInt32();
+                        d2 = Avx2.BlendVariable(Vector256<byte>.Zero, d2.AsByte(), Avx2.Add(rowMask, rowMask).AsByte()).AsInt32();
+                        d3 = Avx2.BlendVariable(Vector256<byte>.Zero, d3.AsByte(), rowMask.AsByte()).AsInt32();
+                    }
+
+                    // Test fast clear flag
+                    if (hiZ != 1)
+                    {
+                        // Merge depth values
+                        d0 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 0)).AsUInt16(), d0.AsUInt16()).AsInt32();
+                        d1 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 1)).AsUInt16(), d1.AsUInt16()).AsInt32();
+                        d2 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 2)).AsUInt16(), d2.AsUInt16()).AsInt32();
+                        d3 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 3)).AsUInt16(), d3.AsUInt16()).AsInt32();
+                    }
+
+                    // Store back new depth
+                    Avx.StoreAligned((int*)(@out + 0), d0);
+                    Avx.StoreAligned((int*)(@out + 1), d1);
+                    Avx.StoreAligned((int*)(@out + 2), d2);
+                    Avx.StoreAligned((int*)(@out + 3), d3);
+
+                    // Update HiZ
+                    Vector256<int> newMinZ = Avx2.Min(Avx2.Min(d0.AsUInt16(), d1.AsUInt16()), Avx2.Min(d2.AsUInt16(), d3.AsUInt16())).AsInt32();
+                    Vector128<int> newMinZ16 = Sse41.MinHorizontal(Sse41.Min(newMinZ.GetLower().AsUInt16(), Avx2.ExtractVector128(newMinZ, 1).AsUInt16())).AsInt32();
+
+                    *pBlockRowHiZ = (ushort)(uint)Sse2.ConvertToInt32(newMinZ16);
                 }
             }
         }
