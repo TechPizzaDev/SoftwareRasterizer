@@ -390,9 +390,9 @@ public unsafe partial class Rasterizer
                     Vector256<float> depth = Avx.Multiply(depthI256.AsSingle(), Vector256.Create(bias));
 
                     Vector256<float> linDepth = Avx.Divide(
-                        Vector256.Create(2 * 0.25f), 
+                        Vector256.Create(2 * 0.25f),
                         Avx.Subtract(
-                            Vector256.Create(0.25f + 1000.0f), 
+                            Vector256.Create(0.25f + 1000.0f),
                             Avx.Multiply(
                                 Avx.Subtract(Vector256.Create(1.0f), depth),
                                 Vector256.Create(1000.0f - 0.25f))));
@@ -405,7 +405,7 @@ public unsafe partial class Rasterizer
                         uint d = (uint)(100 * 256 * l);
                         byte v0 = (byte)(d / 100);
                         byte v1 = (byte)(d % 256);
-                        
+
                         dest[4 * x + 0] = v0;
                         dest[4 * x + 1] = v1;
                         dest[4 * x + 2] = 0;
@@ -546,22 +546,50 @@ public unsafe partial class Rasterizer
 
     private static ulong transposeMask(ulong mask)
     {
-#if false
-        ulong maskA = _pdep_u64(_pext_u64(mask, 0x5555555555555555ull), 0xF0F0F0F0F0F0F0F0ull);
-        ulong maskB = _pdep_u64(_pext_u64(mask, 0xAAAAAAAAAAAAAAAAull), 0x0F0F0F0F0F0F0F0Full);
-#else
-        ulong maskA = 0;
-        ulong maskB = 0;
-        for (uint group = 0; group < 8; ++group)
+        if (Bmi2.X64.IsSupported)
         {
-            for (uint bit = 0; bit < 4; ++bit)
-            {
-                maskA |= ((mask >> (int)(8 * group + 2 * bit + 0)) & 1) << (int)(4 + group * 8 + bit);
-                maskB |= ((mask >> (int)(8 * group + 2 * bit + 1)) & 1) << (int)(0 + group * 8 + bit);
-            }
+            ulong maskA = Bmi2.X64.ParallelBitDeposit(Bmi2.X64.ParallelBitExtract(mask, 0x5555555555555555ul), 0xF0F0F0F0F0F0F0F0ul);
+            ulong maskB = Bmi2.X64.ParallelBitDeposit(Bmi2.X64.ParallelBitExtract(mask, 0xAAAAAAAAAAAAAAAAul), 0x0F0F0F0F0F0F0F0Ful);
+            return maskA | maskB;
         }
-#endif
-        return maskA | maskB;
+        else
+        {
+            ulong maskA = 0;
+            ulong maskB = 0;
+            for (uint group = 0; group < 8; ++group)
+            {
+                for (uint bit = 0; bit < 4; ++bit)
+                {
+                    maskA |= ((mask >> (int)(8 * group + 2 * bit + 0)) & 1) << (int)(4 + group * 8 + bit);
+                    maskB |= ((mask >> (int)(8 * group + 2 * bit + 1)) & 1) << (int)(0 + group * 8 + bit);
+                }
+            }
+            return maskA | maskB;
+        }
+    }
+
+        private static ulong expandMask(uint mask)
+        {
+            if (Bmi2.X64.IsSupported)
+            {
+                return Bmi2.X64.ParallelBitDeposit(mask, 0x101010101010101u);
+            }
+        else
+        {
+            uint a = 0;
+            a |= (mask & 0b00000001u);
+            a |= (mask & 0b00000010u) << 7;
+            a |= (mask & 0b00000100u) << 14;
+            a |= (mask & 0b00001000u) << 21;
+
+            uint b = 0;
+            b |= (mask & 0b00010000u) >> 4;
+            b |= (mask & 0b00100000u) << 3;
+            b |= (mask & 0b01000000u) << 10;
+            b |= (mask & 0b10000000u) << 17;
+
+            return ((ulong)b << 32) | a;
+        }
     }
 
     private static ulong* precomputeRasterizationTable()
@@ -588,6 +616,18 @@ public unsafe partial class Rasterizer
 
             uint slopeLookup = (uint)Sse41.Extract(quantizeSlopeLookup(Vector128.Create(nx), Vector128.Create(ny)), 0);
 
+            Vector256<float> inc = Vector256.Create(
+                (0 - 3.5f) / 8f,
+                (1 - 3.5f) / 8f,
+                (2 - 3.5f) / 8f,
+                (3 - 3.5f) / 8f,
+                (4 - 3.5f) / 8f,
+                (5 - 3.5f) / 8f,
+                (6 - 3.5f) / 8f,
+                (7 - 3.5f) / 8f);
+
+            Vector256<float> incX = Avx.Multiply(inc, Vector256.Create(nx));
+
             for (uint j = 0; j < offsetResolution; ++j)
             {
                 float offset = -0.6f + 1.2f * j / (angularResolution - 1);
@@ -598,17 +638,14 @@ public unsafe partial class Rasterizer
 
                 ulong block = 0;
 
-                for (int x = 0; x < 8; ++x)
+                for (int y = 0; y < 8; ++y)
                 {
-                    for (int y = 0; y < 8; ++y)
-                    {
-                        float edgeDistance = offset + (x - 3.5f) / 8.0f * nx + (y - 3.5f) / 8.0f * ny;
-                        if (edgeDistance <= 0.0f)
-                        {
-                            int bitIndex = 8 * x + y;
-                            block |= 1ul << bitIndex;
-                        }
-                    }
+                    Vector256<float> o = Vector256.Create(offset + (y - 3.5f) / 8.0f * ny);
+                    Vector256<float> edgeDistance = Avx.Add(o, incX);
+                    Vector256<float> cmp = Avx.CompareLessThanOrEqual(edgeDistance, Vector256<float>.Zero);
+
+                    uint mask = (uint)Avx.MoveMask(cmp);
+                    block |= expandMask(mask) << y;
                 }
 
                 precomputedRasterTables[lookup] |= transposeMask(block);
