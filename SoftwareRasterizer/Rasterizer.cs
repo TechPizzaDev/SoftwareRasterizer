@@ -544,6 +544,7 @@ public unsafe partial class Rasterizer
         return Avx2.PackUnsignedSaturate(x1, x2).AsInt32();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong transposeMask(ulong mask)
     {
         if (Bmi2.X64.IsSupported)
@@ -568,12 +569,13 @@ public unsafe partial class Rasterizer
         }
     }
 
-        private static ulong expandMask(uint mask)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong expandMask(uint mask)
+    {
+        if (Bmi2.X64.IsSupported)
         {
-            if (Bmi2.X64.IsSupported)
-            {
-                return Bmi2.X64.ParallelBitDeposit(mask, 0x101010101010101u);
-            }
+            return Bmi2.X64.ParallelBitDeposit(mask, 0x101010101010101u);
+        }
         else
         {
             uint a = 0;
@@ -592,6 +594,7 @@ public unsafe partial class Rasterizer
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static ulong* precomputeRasterizationTable()
     {
         const uint angularResolution = 2000;
