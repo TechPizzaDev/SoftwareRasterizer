@@ -1,8 +1,6 @@
 using System;
-using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 
@@ -10,74 +8,29 @@ namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe partial class Rasterizer
+public unsafe partial class Avx2Rasterizer : Rasterizer
 {
-    public interface IPossiblyNearClipped
-    {
-        static abstract bool PossiblyNearClipped { get; }
-    }
-
-    public readonly struct NearClipped : IPossiblyNearClipped
-    {
-        public static bool PossiblyNearClipped => true;
-    }
-
-    public readonly struct NotNearClipped : IPossiblyNearClipped
-    {
-        public static bool PossiblyNearClipped => false;
-    }
-
     private const FloatComparisonMode _CMP_LT_OQ = FloatComparisonMode.OrderedLessThanNonSignaling;
     private const FloatComparisonMode _CMP_LE_OQ = FloatComparisonMode.OrderedLessThanOrEqualNonSignaling;
     private const FloatComparisonMode _CMP_GT_OQ = FloatComparisonMode.OrderedGreaterThanNonSignaling;
 
-    private const float floatCompressionBias = 2.5237386e-29f; // 0xFFFF << 12 reinterpreted as float
-    private const float minEdgeOffset = -0.45f;
-    private const float maxInvW = 18446742974197923840; // MathF.Sqrt(float.MaxValue)
-
-    private const int OFFSET_QUANTIZATION_BITS = 6;
-    private const int OFFSET_QUANTIZATION_FACTOR = 1 << OFFSET_QUANTIZATION_BITS;
-
-    private const int SLOPE_QUANTIZATION_BITS = 6;
-    private const int SLOPE_QUANTIZATION_FACTOR = 1 << SLOPE_QUANTIZATION_BITS;
-
-    private float* m_modelViewProjection;
-    private float* m_modelViewProjectionRaw;
-
-    private ulong* m_precomputedRasterTables;
-    private Vector128<int>* m_depthBuffer;
-
-    private uint m_hiZ_Size;
-    private ushort* m_hiZ;
-
-    private uint m_width;
-    private uint m_height;
-    private uint m_blocksX;
-    private uint m_blocksY;
-
-    public Rasterizer(uint width, uint height)
+    public Avx2Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
+        base(rasterizationTable, width, height, (nuint)sizeof(Vector256<int>))
     {
-        m_width = width;
-        m_height = height;
-        m_blocksX = width / 8;
-        m_blocksY = height / 8;
-
-        Debug.Assert(width % 8 == 0 && height % 8 == 0);
-
-        m_modelViewProjection = (float*)NativeMemory.AlignedAlloc(16 * sizeof(float), (uint)sizeof(Vector128<float>));
-        m_modelViewProjectionRaw = (float*)NativeMemory.AlignedAlloc(16 * sizeof(float), (uint)sizeof(Vector128<float>));
-
-        m_depthBuffer = (Vector128<int>*)NativeMemory.AlignedAlloc(width * height / 8 * (uint)sizeof(Vector128<float>), (uint)sizeof(Vector256<int>));
-
-        m_hiZ_Size = m_blocksX * m_blocksY + 8; // Add some extra padding to support out-of-bounds reads
-        uint hiZ_Bytes = m_hiZ_Size * sizeof(ushort);
-        m_hiZ = (ushort*)NativeMemory.AlignedAlloc(hiZ_Bytes, (uint)sizeof(Vector128<int>));
-        Unsafe.InitBlockUnaligned(m_hiZ, 0, hiZ_Bytes);
-
-        m_precomputedRasterTables = precomputeRasterizationTable();
     }
 
-    public void setModelViewProjection(float* matrix)
+    public static Avx2Rasterizer Create(RasterizationTable rasterizationTable, uint width, uint height)
+    {
+        bool success = false;
+        rasterizationTable.DangerousAddRef(ref success);
+        if (success)
+        {
+            return new Avx2Rasterizer(rasterizationTable, width, height);
+        }
+        throw new ObjectDisposedException(rasterizationTable.GetType().Name);
+    }
+
+    public override unsafe void setModelViewProjection(float* matrix)
     {
         Vector128<float> mat0 = Sse.LoadVector128(matrix + 0);
         Vector128<float> mat1 = Sse.LoadVector128(matrix + 4);
@@ -87,10 +40,10 @@ public unsafe partial class Rasterizer
         _MM_TRANSPOSE4_PS(ref mat0, ref mat1, ref mat2, ref mat3);
 
         // Store rows
-        Sse.Store(m_modelViewProjectionRaw + 0, mat0);
-        Sse.Store(m_modelViewProjectionRaw + 4, mat1);
-        Sse.Store(m_modelViewProjectionRaw + 8, mat2);
-        Sse.Store(m_modelViewProjectionRaw + 12, mat3);
+        Sse.StoreAligned(m_modelViewProjectionRaw + 0, mat0);
+        Sse.StoreAligned(m_modelViewProjectionRaw + 4, mat1);
+        Sse.StoreAligned(m_modelViewProjectionRaw + 8, mat2);
+        Sse.StoreAligned(m_modelViewProjectionRaw + 12, mat3);
 
         // Bake viewport transform into matrix and 6shift by half a block
         mat0 = Sse.Multiply(Sse.Add(mat0, mat3), Vector128.Create(m_width * 0.5f - 4.0f));
@@ -102,13 +55,13 @@ public unsafe partial class Rasterizer
         _MM_TRANSPOSE4_PS(ref mat0, ref mat1, ref mat2, ref mat3);
 
         // Store prebaked cols
-        Sse.Store(m_modelViewProjection + 0, mat0);
-        Sse.Store(m_modelViewProjection + 4, mat1);
-        Sse.Store(m_modelViewProjection + 8, mat2);
-        Sse.Store(m_modelViewProjection + 12, mat3);
+        Sse.StoreAligned(m_modelViewProjection + 0, mat0);
+        Sse.StoreAligned(m_modelViewProjection + 4, mat1);
+        Sse.StoreAligned(m_modelViewProjection + 8, mat2);
+        Sse.StoreAligned(m_modelViewProjection + 12, mat3);
     }
 
-    public void clear()
+    public override void clear()
     {
         // Mark blocks as cleared by setting Hi Z to 1 (one unit separated from far plane). 
         // This value is extremely unlikely to occur during normal rendering, so we don't
@@ -124,7 +77,7 @@ public unsafe partial class Rasterizer
         }
     }
 
-    public bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping)
+    public override bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping)
     {
         // Frustum cull
         Vector128<float> extents = Sse.Subtract(boundsMax, boundsMin);
@@ -292,7 +245,7 @@ public unsafe partial class Rasterizer
         return true;
     }
 
-    public bool query2D(uint minX, uint maxX, uint minY, uint maxY, uint maxZ)
+    public override bool query2D(uint minX, uint maxX, uint minY, uint maxY, uint maxZ)
     {
         ushort* pHiZBuffer = m_hiZ;
         Vector128<int>* pDepthBuffer = m_depthBuffer;
@@ -359,7 +312,7 @@ public unsafe partial class Rasterizer
         return false;
     }
 
-    public void readBackDepth(byte* target)
+    public override void readBackDepth(byte* target)
     {
         const float bias = 3.9623753e+28f; // 1.0f / floatCompressionBias
 
@@ -483,19 +436,6 @@ public unsafe partial class Rasterizer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<int> quantizeSlopeLookup(Vector128<float> nx, Vector128<float> ny)
-    {
-        Vector128<int> yNeg = Sse.CompareLessThan(ny, Vector128<float>.Zero).AsInt32();
-
-        // Remap [-1, 1] to [0, SLOPE_QUANTIZATION / 2]
-        const float mul = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f;
-        const float add = mul + 0.5f;
-
-        Vector128<int> quantizedSlope = Sse2.ConvertToVector128Int32WithTruncation(Fma.MultiplyAdd(nx, Vector128.Create(mul), Vector128.Create(add)));
-        return Sse2.ShiftLeftLogical(Sse2.Subtract(Sse2.ShiftLeftLogical(quantizedSlope, 1), yNeg), OFFSET_QUANTIZATION_BITS);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector256<int> quantizeSlopeLookup(Vector256<float> nx, Vector256<float> ny)
     {
         Vector256<int> yNeg = Avx.Compare(ny, Vector256<float>.Zero, _CMP_LE_OQ).AsInt32();
@@ -507,19 +447,6 @@ public unsafe partial class Rasterizer
 
         Vector256<int> quantizedSlope = Avx.ConvertToVector256Int32WithTruncation(Fma.MultiplyAdd(nx, Vector256.Create(mul), Vector256.Create(add)));
         return Avx2.ShiftLeftLogical(Avx2.Subtract(Avx2.ShiftLeftLogical(quantizedSlope, 1), yNeg), OFFSET_QUANTIZATION_BITS);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static uint quantizeOffsetLookup(float offset)
-    {
-        const float maxOffset = -minEdgeOffset;
-
-        // Remap [minOffset, maxOffset] to [0, OFFSET_QUANTIZATION]
-        const float mul = (OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset);
-        const float add = 0.5f - minEdgeOffset * mul;
-
-        float lookup = offset * mul + add;
-        return (uint)Math.Min(Math.Max((int)lookup, 0), OFFSET_QUANTIZATION_FACTOR - 1);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -544,126 +471,7 @@ public unsafe partial class Rasterizer
         return Avx2.PackUnsignedSaturate(x1, x2).AsInt32();
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ulong transposeMask(ulong mask)
-    {
-        if (Bmi2.X64.IsSupported)
-        {
-            ulong maskA = Bmi2.X64.ParallelBitDeposit(Bmi2.X64.ParallelBitExtract(mask, 0x5555555555555555ul), 0xF0F0F0F0F0F0F0F0ul);
-            ulong maskB = Bmi2.X64.ParallelBitDeposit(Bmi2.X64.ParallelBitExtract(mask, 0xAAAAAAAAAAAAAAAAul), 0x0F0F0F0F0F0F0F0Ful);
-            return maskA | maskB;
-        }
-        else
-        {
-            ulong maskA = 0;
-            ulong maskB = 0;
-            for (uint group = 0; group < 8; ++group)
-            {
-                for (uint bit = 0; bit < 4; ++bit)
-                {
-                    maskA |= ((mask >> (int)(8 * group + 2 * bit + 0)) & 1) << (int)(4 + group * 8 + bit);
-                    maskB |= ((mask >> (int)(8 * group + 2 * bit + 1)) & 1) << (int)(0 + group * 8 + bit);
-                }
-            }
-            return maskA | maskB;
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ulong expandMask(uint mask)
-    {
-        if (Bmi2.X64.IsSupported)
-        {
-            return Bmi2.X64.ParallelBitDeposit(mask, 0x101010101010101u);
-        }
-        else
-        {
-            uint a = 0;
-            a |= (mask & 0b00000001u);
-            a |= (mask & 0b00000010u) << 7;
-            a |= (mask & 0b00000100u) << 14;
-            a |= (mask & 0b00001000u) << 21;
-
-            uint b = 0;
-            b |= (mask & 0b00010000u) >> 4;
-            b |= (mask & 0b00100000u) << 3;
-            b |= (mask & 0b01000000u) << 10;
-            b |= (mask & 0b10000000u) << 17;
-
-            return ((ulong)b << 32) | a;
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    private static ulong* precomputeRasterizationTable()
-    {
-        const uint angularResolution = 2000;
-        const uint offsetResolution = 2000;
-
-        uint precomputedRasterTablesByteCount = OFFSET_QUANTIZATION_FACTOR * SLOPE_QUANTIZATION_FACTOR * sizeof(ulong);
-        ulong* precomputedRasterTables = (ulong*)NativeMemory.AlignedAlloc(
-            byteCount: precomputedRasterTablesByteCount,
-            alignment: sizeof(ulong));
-
-        Unsafe.InitBlockUnaligned(precomputedRasterTables, 0, precomputedRasterTablesByteCount);
-
-        for (uint i = 0; i < angularResolution; ++i)
-        {
-            float angle = -0.1f + 6.4f * i / (angularResolution - 1);
-
-            (float ny, float nx) = MathF.SinCos(angle);
-            float l = 1.0f / (MathF.Abs(nx) + MathF.Abs(ny));
-
-            nx *= l;
-            ny *= l;
-
-            uint slopeLookup = (uint)Sse41.Extract(quantizeSlopeLookup(Vector128.Create(nx), Vector128.Create(ny)), 0);
-
-            Vector256<float> inc = Vector256.Create(
-                (0 - 3.5f) / 8f,
-                (1 - 3.5f) / 8f,
-                (2 - 3.5f) / 8f,
-                (3 - 3.5f) / 8f,
-                (4 - 3.5f) / 8f,
-                (5 - 3.5f) / 8f,
-                (6 - 3.5f) / 8f,
-                (7 - 3.5f) / 8f);
-
-            Vector256<float> incX = Avx.Multiply(inc, Vector256.Create(nx));
-
-            for (uint j = 0; j < offsetResolution; ++j)
-            {
-                float offset = -0.6f + 1.2f * j / (angularResolution - 1);
-
-                uint offsetLookup = quantizeOffsetLookup(offset);
-
-                uint lookup = slopeLookup | offsetLookup;
-
-                ulong block = 0;
-
-                for (int y = 0; y < 8; ++y)
-                {
-                    Vector256<float> o = Vector256.Create(offset + (y - 3.5f) / 8.0f * ny);
-                    Vector256<float> edgeDistance = Avx.Add(o, incX);
-                    Vector256<float> cmp = Avx.CompareLessThanOrEqual(edgeDistance, Vector256<float>.Zero);
-
-                    uint mask = (uint)Avx.MoveMask(cmp);
-                    block |= expandMask(mask) << y;
-                }
-
-                precomputedRasterTables[lookup] |= transposeMask(block);
-            }
-
-            // For each slope, the first block should be all ones, the last all zeroes
-            Debug.Assert(precomputedRasterTables[slopeLookup] == 0xffff_ffff_ffff_ffff);
-            Debug.Assert(precomputedRasterTables[slopeLookup + OFFSET_QUANTIZATION_FACTOR - 1] == 0);
-        }
-
-        return precomputedRasterTables;
-    }
-
-    public void rasterize<T>(Occluder occluder)
-        where T : IPossiblyNearClipped
+    public override void rasterize<T>(Occluder occluder)
     {
         Vector256<int>* vertexData = occluder.m_vertexData;
         uint packetCount = occluder.m_packetCount;
@@ -1204,7 +1012,7 @@ public unsafe partial class Rasterizer
         where T : IPossiblyNearClipped
     {
         // Fetch data pointers since we'll manually strength-reduce memory arithmetic
-        ulong* pTable = m_precomputedRasterTables;
+        ulong* pTable = (ulong*)m_precomputedRasterTables.DangerousGetHandle();
         ushort* pHiZBuffer = m_hiZ;
         Vector128<int>* pDepthBuffer = m_depthBuffer;
 

@@ -37,6 +37,7 @@ public static unsafe class Main
     static Vector3 g_upVector = new(0.0f, 0.0f, 1.0f);
 #endif
 
+    static RasterizationTable g_rasterizationTable;
     static Rasterizer g_rasterizer;
 
     static HBITMAP g_hBitmap;
@@ -80,7 +81,8 @@ public static unsafe class Main
             inputIndices,
             new ReadOnlySpan<Vector128<float>>(vertices, (int)vertexCount));
 
-        g_rasterizer = new Rasterizer(WINDOW_WIDTH, WINDOW_HEIGHT);
+        g_rasterizationTable = new RasterizationTable();
+        g_rasterizer = Avx2Rasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // Pad to a multiple of 8 quads
         while (indexList.Count % 32 != 0)

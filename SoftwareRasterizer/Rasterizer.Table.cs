@@ -4,9 +4,9 @@ namespace SoftwareRasterizer;
 
 using static PrimitiveMode;
 
-public partial class Rasterizer
+public abstract partial class Rasterizer
 {
-    static ReadOnlySpan<PrimitiveMode> modeTable => new PrimitiveMode[256]
+    protected static ReadOnlySpan<PrimitiveMode> modeTable => new PrimitiveMode[256]
     {
         Convex,        Triangle1,     ConcaveLeft,   Triangle1,     Triangle0,     Culled,        Triangle0,     Culled,
         ConcaveRight,  Triangle1,     Culled,        Triangle1,     Triangle0,     Culled,        Triangle0,     Culled,
