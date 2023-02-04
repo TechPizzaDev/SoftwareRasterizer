@@ -87,13 +87,13 @@ public class Matching
         return m_matchedVertex[v];
     }
 
-    void match(Vertex v, Vertex w)
+    private void match(Vertex v, Vertex w)
     {
         m_matchedVertex[v] = w;
         m_matchedVertex[w] = v;
     }
 
-    void augment(ReadOnlySpan<Vertex> path)
+    private void augment(ReadOnlySpan<Vertex> path)
     {
         for (int i = 0; i < path.Length; i += 2)
         {
@@ -101,7 +101,7 @@ public class Matching
         }
     }
 
-    bool findAugmentingPath(Vertex root, List<Vertex> path)
+    private bool findAugmentingPath(Vertex root, List<Vertex> path)
     {
         // Clear out the forest
         m_clearToken++;
@@ -129,7 +129,7 @@ public class Matching
         return false;
     }
 
-    bool examineEdge(Vertex root, Vertex v, Vertex w, List<Vertex> path)
+    private bool examineEdge(Vertex root, Vertex v, Vertex w, List<Vertex> path)
     {
         Vertex vBar = find(v);
         Vertex wBar = find(w);
@@ -157,13 +157,13 @@ public class Matching
         return false;
     }
 
-    void buildAugmentingPath(Vertex root, Vertex v, Vertex w, List<Vertex> path)
+    private void buildAugmentingPath(Vertex root, Vertex v, Vertex w, List<Vertex> path)
     {
         path.Add(w);
         findPath(v, root, path);
     }
 
-    void extendTree(Vertex v, Vertex w)
+    private void extendTree(Vertex v, Vertex w)
     {
         Vertex u = m_matchedVertex[w];
 
@@ -184,7 +184,7 @@ public class Matching
         m_queue.Enqueue(u);
     }
 
-    void shrinkBlossom(Vertex v, Vertex w)
+    private void shrinkBlossom(Vertex v, Vertex w)
     {
         Vertex b = findCommonAncestor(v, w);
 
@@ -192,7 +192,7 @@ public class Matching
         shrinkPath(b, w, v);
     }
 
-    void shrinkPath(Vertex b, Vertex v, Vertex w)
+    private void shrinkPath(Vertex b, Vertex v, Vertex w)
     {
         Vertex u = find(v);
 
@@ -204,12 +204,12 @@ public class Matching
             makeUnion(b, u);
             makeRepresentative(b);
             m_queue.Enqueue(u);
-            m_bridges[u] = new VertexPair(v, w);
+            m_bridges[u] = new VertexPair((uint)v, (uint)w);
             u = find(m_tree[u].m_parent);
         }
     }
 
-    Vertex findCommonAncestor(Vertex v, Vertex w)
+    private Vertex findCommonAncestor(Vertex v, Vertex w)
     {
         while (w != v)
         {
@@ -226,7 +226,7 @@ public class Matching
         return find(v);
     }
 
-    void findPath(Vertex s, Vertex t, List<Vertex> path)
+    private void findPath(Vertex s, Vertex t, List<Vertex> path)
     {
         if (s == t)
         {
@@ -253,20 +253,20 @@ public class Matching
         }
     }
 
-    void makeUnion(int x, int y)
+    private void makeUnion(int x, int y)
     {
         int xRoot = find(x);
         m_tree[xRoot].m_blossom = find(y);
     }
 
-    void makeRepresentative(int x)
+    private void makeRepresentative(int x)
     {
         int xRoot = find(x);
         m_tree[xRoot].m_blossom = x;
         m_tree[x].m_blossom = x;
     }
 
-    int find(int x)
+    private int find(int x)
     {
         if (m_tree[x].m_clearToken != m_clearToken)
         {
@@ -308,16 +308,10 @@ public struct VertexPair : IEquatable<VertexPair>
     public uint first;
     public uint second;
 
-    public VertexPair(uint item1, uint item2)
+    public VertexPair(uint first, uint second)
     {
-        this.first = item1;
-        this.second = item2;
-    }
-
-    public VertexPair(int item1, int item2)
-    {
-        this.first = (uint)item1;
-        this.second = (uint)item2;
+        this.first = first;
+        this.second = second;
     }
 
     public bool Equals(VertexPair other)
@@ -348,7 +342,8 @@ public static unsafe class QuadDecomposition
         Vector128<float> planeDistA = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n0, Sse.Subtract(v1, v3), 0x7F));
         Vector128<float> planeDistB = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n2, Sse.Subtract(v1, v3), 0x7F));
 
-        if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(maximumDepthError)) || Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.Create(maximumDepthError)))
+        if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(maximumDepthError)) || 
+            Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.Create(maximumDepthError)))
         {
             return false;
         }
@@ -394,6 +389,7 @@ public static unsafe class QuadDecomposition
                     continue;
                 }
 
+                List<int> neighborList = candidateGraph.m_adjacencyList[triangleIdx];
                 foreach (VertexPair pair in neighbors)
                 {
                     uint neighborTriangle = pair.first;
@@ -406,7 +402,7 @@ public static unsafe class QuadDecomposition
 
                     if (canMergeTrianglesToQuad(vertices[quad0], vertices[quad1], vertices[quad2], vertices[quad3]))
                     {
-                        candidateGraph.m_adjacencyList[triangleIdx].Add((int)neighborTriangle);
+                        neighborList.Add((int)neighborTriangle);
                         candidateGraph.m_adjacencyList[neighborTriangle].Add((int)triangleIdx);
                     }
                 }
@@ -426,9 +422,9 @@ public static unsafe class QuadDecomposition
             // No quad found
             if (neighbor == -1)
             {
-                var i0 = indices[(int)(3 * triangleIdx + 0)];
-                var i1 = indices[(int)(3 * triangleIdx + 1)];
-                var i2 = indices[(int)(3 * triangleIdx + 2)];
+                uint i0 = indices[(int)(3 * triangleIdx + 0)];
+                uint i1 = indices[(int)(3 * triangleIdx + 1)];
+                uint i2 = indices[(int)(3 * triangleIdx + 2)];
 
                 result.Add(i0);
                 result.Add(i2);
