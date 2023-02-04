@@ -525,8 +525,8 @@ public unsafe partial class Avx2Rasterizer : Rasterizer
         const int stackBufferSize =
             alignment - 1 +
             sizeof(uint) * 8 * 4 + // uint[8] x 4
-            sizeof(float) * 8 * 8 * 4 + // Vector128<float>[8] x 4
-            sizeof(int) * 8 * 8 * 1 + // Vector128<int>[8] x 1
+            sizeof(float) * 4 * 8 * 4 + // Vector128<float>[8] x 4
+            sizeof(int) * 4 * 8 * 1 + // Vector128<int>[8] x 1
             sizeof(ushort) * 8 * 1; // ushort[8] x 1
 
         byte* stackBuffer = stackalloc byte[stackBufferSize];
