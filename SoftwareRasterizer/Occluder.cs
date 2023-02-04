@@ -9,7 +9,7 @@ namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe class Occluder
+public unsafe struct Occluder
 {
     public Vector128<float> m_center;
 

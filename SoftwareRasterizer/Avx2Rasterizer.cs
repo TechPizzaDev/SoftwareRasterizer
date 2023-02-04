@@ -471,7 +471,7 @@ public unsafe partial class Avx2Rasterizer : Rasterizer
         return Avx2.PackUnsignedSaturate(x1, x2).AsInt32();
     }
 
-    public override void rasterize<T>(Occluder occluder)
+    public override void rasterize<T>(in Occluder occluder)
     {
         Vector256<int>* vertexData = occluder.m_vertexData;
         uint packetCount = occluder.m_packetCount;

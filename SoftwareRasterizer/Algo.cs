@@ -7,7 +7,7 @@ public static unsafe class Algo
 {
     public interface IComparer<T>
     {
-        bool Compare(T x, T y);
+        bool Compare(in T x, in T y);
     }
 
     private const int _ISORT_MAX = 32; // maximum size for insertion sort

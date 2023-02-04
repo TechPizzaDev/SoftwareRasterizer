@@ -9,7 +9,7 @@ public unsafe interface IRasterizer : IDisposable
     
     void clear();
 
-    void rasterize<T>(Occluder occluder)
+    void rasterize<T>(in Occluder occluder)
         where T : IPossiblyNearClipped;
 
 	bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping);

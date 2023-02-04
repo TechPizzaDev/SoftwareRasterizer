@@ -199,7 +199,7 @@ public static unsafe class Main
                 // Sort front to back
                 Algo.sort(CollectionsMarshal.AsSpan(g_occluders), new OccluderComparer(g_cameraPosition.AsVector128()));
 
-                foreach (Occluder occluder in g_occluders)
+                foreach (ref readonly Occluder occluder in CollectionsMarshal.AsSpan(g_occluders))
                 {
                     if (g_rasterizer.queryVisibility(occluder.m_boundsMin, occluder.m_boundsMax, out bool needsClipping))
                     {
@@ -328,7 +328,7 @@ public static unsafe class Main
             CameraPosition = cameraPosition;
         }
 
-        public bool Compare(Occluder x, Occluder y)
+        public bool Compare(in Occluder x, in Occluder y)
         {
             Vector128<float> dist1 = Sse.Subtract(x.m_center, CameraPosition);
             Vector128<float> dist2 = Sse.Subtract(y.m_center, CameraPosition);

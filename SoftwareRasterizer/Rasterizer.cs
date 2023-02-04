@@ -69,7 +69,7 @@ public abstract unsafe partial class Rasterizer : IRasterizer
 
     public abstract void clear();
 
-    public abstract void rasterize<T>(Occluder occluder) where T : IPossiblyNearClipped;
+    public abstract void rasterize<T>(in Occluder occluder) where T : IPossiblyNearClipped;
 
     public abstract bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping);
 

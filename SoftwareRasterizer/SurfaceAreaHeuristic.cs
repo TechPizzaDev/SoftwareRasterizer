@@ -20,7 +20,7 @@ public static unsafe class SurfaceAreaHeuristic
             this.mask = mask;
         }
 
-        public bool Compare(uint x, uint y)
+        public bool Compare(in uint x, in uint y)
         {
             Vector128<float> aabbX = aabbs[x].getCenter();
             Vector128<float> aabbY = aabbs[y].getCenter();
