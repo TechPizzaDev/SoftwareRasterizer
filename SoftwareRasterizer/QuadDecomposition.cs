@@ -11,326 +11,326 @@ using static VectorMath;
 
 using Vertex = Int32;
 
-public readonly struct Graph
+public static unsafe class QuadDecomposition
 {
-    public int numVertices()
+    private readonly struct Graph
     {
-        return m_adjacencyList.Length;
-    }
-
-    public readonly List<Vertex>[] m_adjacencyList;
-
-    public Graph(int length)
-    {
-        m_adjacencyList = new List<Vertex>[length];
-
-        for (int i = 0; i < m_adjacencyList.Length; i++)
+        public int numVertices()
         {
-            m_adjacencyList[i] = new List<Vertex>();
+            return m_adjacencyList.Length;
+        }
+
+        public readonly List<Vertex>[] m_adjacencyList;
+
+        public Graph(int length)
+        {
+            m_adjacencyList = new List<Vertex>[length];
+
+            for (int i = 0; i < m_adjacencyList.Length; i++)
+            {
+                m_adjacencyList[i] = new List<Vertex>();
+            }
         }
     }
-}
 
-public class Matching
-{
-    public Matching(Graph graph)
+    private struct Matching
     {
-        m_graph = graph;
-        m_matchedVertex = new Vertex[graph.numVertices()];
-        m_matchedVertex.AsSpan().Fill(-1);
-        m_bridges = new VertexPair[graph.numVertices()];
-        m_clearToken = 0;
-        m_tree = new Node[graph.numVertices()];
-        m_queue = new Queue<Vertex>();
-
-        List<Vertex> unmatchedVertices = new();
-
-        // Start with a greedy maximal matching
-        for (Vertex v = 0; v < m_graph.numVertices(); ++v)
+        public Matching(Graph graph)
         {
-            if (m_matchedVertex[v] == -1)
+            m_graph = graph;
+            m_matchedVertex = new Vertex[graph.numVertices()];
+            m_matchedVertex.AsSpan().Fill(-1);
+            m_bridges = new VertexPair[graph.numVertices()];
+            m_clearToken = 0;
+            m_tree = new Node[graph.numVertices()];
+            m_queue = new Queue<Vertex>();
+
+            List<Vertex> unmatchedVertices = new();
+
+            // Start with a greedy maximal matching
+            for (Vertex v = 0; v < m_graph.numVertices(); ++v)
             {
-                bool found = false;
+                if (m_matchedVertex[v] == -1)
+                {
+                    bool found = false;
+                    foreach (int w in m_graph.m_adjacencyList[v])
+                    {
+                        if (m_matchedVertex[w] == -1)
+                        {
+                            match(v, w);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        unmatchedVertices.Add(v);
+                    }
+                }
+            }
+
+            List<Vertex> path = new();
+            foreach (int v in unmatchedVertices)
+            {
+                if (m_matchedVertex[v] == -1)
+                {
+                    if (findAugmentingPath(v, path))
+                    {
+                        augment(CollectionsMarshal.AsSpan(path));
+                        path.Clear();
+                    }
+                }
+            }
+        }
+
+        public Vertex getMatchedVertex(Vertex v)
+        {
+            return m_matchedVertex[v];
+        }
+
+        private void match(Vertex v, Vertex w)
+        {
+            m_matchedVertex[v] = w;
+            m_matchedVertex[w] = v;
+        }
+
+        private void augment(ReadOnlySpan<Vertex> path)
+        {
+            for (int i = 0; i < path.Length; i += 2)
+            {
+                match(path[i], path[i + 1]);
+            }
+        }
+
+        private bool findAugmentingPath(Vertex root, List<Vertex> path)
+        {
+            // Clear out the forest
+            m_clearToken++;
+
+            // Start our tree root
+            m_tree[root].m_depth = 0;
+            m_tree[root].m_parent = -1;
+            m_tree[root].m_clearToken = m_clearToken;
+            m_tree[root].m_blossom = root;
+
+            m_queue.Enqueue(root);
+
+            while (m_queue.TryDequeue(out Vertex v))
+            {
                 foreach (int w in m_graph.m_adjacencyList[v])
+                {
+                    if (examineEdge(root, v, w, path))
+                    {
+                        m_queue.Clear();
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private bool examineEdge(Vertex root, Vertex v, Vertex w, List<Vertex> path)
+        {
+            Vertex vBar = find(v);
+            Vertex wBar = find(w);
+
+            if (vBar != wBar)
+            {
+                if (m_tree[wBar].m_clearToken != m_clearToken)
                 {
                     if (m_matchedVertex[w] == -1)
                     {
-                        match(v, w);
-                        found = true;
-                        break;
+                        buildAugmentingPath(root, v, w, path);
+                        return true;
+                    }
+                    else
+                    {
+                        extendTree(v, w);
                     }
                 }
-
-                if (!found)
+                else if (m_tree[wBar].m_depth % 2 == 0)
                 {
-                    unmatchedVertices.Add(v);
+                    shrinkBlossom(v, w);
                 }
+            }
+
+            return false;
+        }
+
+        private void buildAugmentingPath(Vertex root, Vertex v, Vertex w, List<Vertex> path)
+        {
+            path.Add(w);
+            findPath(v, root, path);
+        }
+
+        private void extendTree(Vertex v, Vertex w)
+        {
+            Vertex u = m_matchedVertex[w];
+
+            ref Node nodeV = ref m_tree[v];
+            ref Node nodeW = ref m_tree[w];
+            ref Node nodeU = ref m_tree[u];
+
+            nodeW.m_depth = nodeV.m_depth + 1 + (nodeV.m_depth & 1);    // Must be odd, so we add either 1 or 2
+            nodeW.m_parent = v;
+            nodeW.m_clearToken = m_clearToken;
+            nodeW.m_blossom = w;
+
+            nodeU.m_depth = nodeW.m_depth + 1;
+            nodeU.m_parent = w;
+            nodeU.m_clearToken = m_clearToken;
+            nodeU.m_blossom = u;
+
+            m_queue.Enqueue(u);
+        }
+
+        private void shrinkBlossom(Vertex v, Vertex w)
+        {
+            Vertex b = findCommonAncestor(v, w);
+
+            shrinkPath(b, v, w);
+            shrinkPath(b, w, v);
+        }
+
+        private void shrinkPath(Vertex b, Vertex v, Vertex w)
+        {
+            Vertex u = find(v);
+
+            while (u != b)
+            {
+                makeUnion(b, u);
+                Debug.Assert(m_matchedVertex[u] != -1);
+                u = m_matchedVertex[u];
+                makeUnion(b, u);
+                makeRepresentative(b);
+                m_queue.Enqueue(u);
+                m_bridges[u] = new VertexPair((uint)v, (uint)w);
+                u = find(m_tree[u].m_parent);
             }
         }
 
-        List<Vertex> path = new();
-        foreach (int v in unmatchedVertices)
+        private Vertex findCommonAncestor(Vertex v, Vertex w)
         {
-            if (m_matchedVertex[v] == -1)
+            while (w != v)
             {
-                if (findAugmentingPath(v, path))
+                if (m_tree[v].m_depth > m_tree[w].m_depth)
                 {
-                    augment(CollectionsMarshal.AsSpan(path));
-                    path.Clear();
-                }
-            }
-        }
-    }
-
-    public Vertex getMatchedVertex(Vertex v)
-    {
-        return m_matchedVertex[v];
-    }
-
-    private void match(Vertex v, Vertex w)
-    {
-        m_matchedVertex[v] = w;
-        m_matchedVertex[w] = v;
-    }
-
-    private void augment(ReadOnlySpan<Vertex> path)
-    {
-        for (int i = 0; i < path.Length; i += 2)
-        {
-            match(path[i], path[i + 1]);
-        }
-    }
-
-    private bool findAugmentingPath(Vertex root, List<Vertex> path)
-    {
-        // Clear out the forest
-        m_clearToken++;
-
-        // Start our tree root
-        m_tree[root].m_depth = 0;
-        m_tree[root].m_parent = -1;
-        m_tree[root].m_clearToken = m_clearToken;
-        m_tree[root].m_blossom = root;
-
-        m_queue.Enqueue(root);
-
-        while (m_queue.TryDequeue(out Vertex v))
-        {
-            foreach (int w in m_graph.m_adjacencyList[v])
-            {
-                if (examineEdge(root, v, w, path))
-                {
-                    m_queue.Clear();
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private bool examineEdge(Vertex root, Vertex v, Vertex w, List<Vertex> path)
-    {
-        Vertex vBar = find(v);
-        Vertex wBar = find(w);
-
-        if (vBar != wBar)
-        {
-            if (m_tree[wBar].m_clearToken != m_clearToken)
-            {
-                if (m_matchedVertex[w] == -1)
-                {
-                    buildAugmentingPath(root, v, w, path);
-                    return true;
+                    v = m_tree[v].m_parent;
                 }
                 else
                 {
-                    extendTree(v, w);
+                    w = m_tree[w].m_parent;
                 }
             }
-            else if (m_tree[wBar].m_depth % 2 == 0)
+
+            return find(v);
+        }
+
+        private void findPath(Vertex s, Vertex t, List<Vertex> path)
+        {
+            if (s == t)
             {
-                shrinkBlossom(v, w);
+                path.Add(s);
             }
-        }
-
-        return false;
-    }
-
-    private void buildAugmentingPath(Vertex root, Vertex v, Vertex w, List<Vertex> path)
-    {
-        path.Add(w);
-        findPath(v, root, path);
-    }
-
-    private void extendTree(Vertex v, Vertex w)
-    {
-        Vertex u = m_matchedVertex[w];
-
-        ref Node nodeV = ref m_tree[v];
-        ref Node nodeW = ref m_tree[w];
-        ref Node nodeU = ref m_tree[u];
-
-        nodeW.m_depth = nodeV.m_depth + 1 + (nodeV.m_depth & 1);    // Must be odd, so we add either 1 or 2
-        nodeW.m_parent = v;
-        nodeW.m_clearToken = m_clearToken;
-        nodeW.m_blossom = w;
-
-        nodeU.m_depth = nodeW.m_depth + 1;
-        nodeU.m_parent = w;
-        nodeU.m_clearToken = m_clearToken;
-        nodeU.m_blossom = u;
-
-        m_queue.Enqueue(u);
-    }
-
-    private void shrinkBlossom(Vertex v, Vertex w)
-    {
-        Vertex b = findCommonAncestor(v, w);
-
-        shrinkPath(b, v, w);
-        shrinkPath(b, w, v);
-    }
-
-    private void shrinkPath(Vertex b, Vertex v, Vertex w)
-    {
-        Vertex u = find(v);
-
-        while (u != b)
-        {
-            makeUnion(b, u);
-            Debug.Assert(m_matchedVertex[u] != -1);
-            u = m_matchedVertex[u];
-            makeUnion(b, u);
-            makeRepresentative(b);
-            m_queue.Enqueue(u);
-            m_bridges[u] = new VertexPair((uint)v, (uint)w);
-            u = find(m_tree[u].m_parent);
-        }
-    }
-
-    private Vertex findCommonAncestor(Vertex v, Vertex w)
-    {
-        while (w != v)
-        {
-            if (m_tree[v].m_depth > m_tree[w].m_depth)
+            else if (m_tree[s].m_depth % 2 == 0)
             {
-                v = m_tree[v].m_parent;
+                path.Add(s);
+                path.Add(m_matchedVertex[s]);
+                findPath(m_tree[m_matchedVertex[s]].m_parent, t, path);
             }
             else
             {
-                w = m_tree[w].m_parent;
+                Vertex v = (Vertex)m_bridges[s].first;
+                Vertex w = (Vertex)m_bridges[s].second;
+
+                path.Add(s);
+
+                int offset = path.Count;
+                findPath(v, m_matchedVertex[s], path);
+                CollectionsMarshal.AsSpan(path).Slice(offset).Reverse();
+
+                findPath(w, t, path);
             }
         }
 
-        return find(v);
-    }
-
-    private void findPath(Vertex s, Vertex t, List<Vertex> path)
-    {
-        if (s == t)
+        private void makeUnion(int x, int y)
         {
-            path.Add(s);
-        }
-        else if (m_tree[s].m_depth % 2 == 0)
-        {
-            path.Add(s);
-            path.Add(m_matchedVertex[s]);
-            findPath(m_tree[m_matchedVertex[s]].m_parent, t, path);
-        }
-        else
-        {
-            Vertex v = (Vertex)m_bridges[s].first;
-            Vertex w = (Vertex)m_bridges[s].second;
-
-            path.Add(s);
-
-            int offset = path.Count;
-            findPath(v, m_matchedVertex[s], path);
-            CollectionsMarshal.AsSpan(path).Slice(offset).Reverse();
-
-            findPath(w, t, path);
-        }
-    }
-
-    private void makeUnion(int x, int y)
-    {
-        int xRoot = find(x);
-        m_tree[xRoot].m_blossom = find(y);
-    }
-
-    private void makeRepresentative(int x)
-    {
-        int xRoot = find(x);
-        m_tree[xRoot].m_blossom = x;
-        m_tree[x].m_blossom = x;
-    }
-
-    private int find(int x)
-    {
-        if (m_tree[x].m_clearToken != m_clearToken)
-        {
-            return x;
+            int xRoot = find(x);
+            m_tree[xRoot].m_blossom = find(y);
         }
 
-        if (x != m_tree[x].m_blossom)
+        private void makeRepresentative(int x)
         {
-            // Path compression
-            m_tree[x].m_blossom = find(m_tree[x].m_blossom);
+            int xRoot = find(x);
+            m_tree[xRoot].m_blossom = x;
+            m_tree[x].m_blossom = x;
         }
 
-        return m_tree[x].m_blossom;
+        private int find(int x)
+        {
+            if (m_tree[x].m_clearToken != m_clearToken)
+            {
+                return x;
+            }
+
+            if (x != m_tree[x].m_blossom)
+            {
+                // Path compression
+                m_tree[x].m_blossom = find(m_tree[x].m_blossom);
+            }
+
+            return m_tree[x].m_blossom;
+        }
+
+        private int m_clearToken;
+
+        private Graph m_graph;
+
+        private Queue<Vertex> m_queue;
+        private Vertex[] m_matchedVertex;
+
+        private Node[] m_tree;
+
+        private VertexPair[] m_bridges;
+
+        private struct Node
+        {
+            public int m_depth;
+            public Vertex m_parent;
+            public Vertex m_blossom;
+
+            public int m_clearToken;
+        }
     }
 
-    private int m_clearToken;
-
-    private Graph m_graph;
-
-    private Queue<Vertex> m_queue;
-    private Vertex[] m_matchedVertex;
-
-    private Node[] m_tree;
-
-    private VertexPair[] m_bridges;
-
-    private struct Node
+    private struct VertexPair : IEquatable<VertexPair>
     {
-        public int m_depth;
-        public Vertex m_parent;
-        public Vertex m_blossom;
+        public uint first;
+        public uint second;
 
-        public int m_clearToken;
-    }
-}
+        public VertexPair(uint first, uint second)
+        {
+            this.first = first;
+            this.second = second;
+        }
 
-public struct VertexPair : IEquatable<VertexPair>
-{
-    public uint first;
-    public uint second;
+        public bool Equals(VertexPair other)
+        {
+            return
+                first == other.first &&
+                second == other.second;
+        }
 
-    public VertexPair(uint first, uint second)
-    {
-        this.first = first;
-        this.second = second;
-    }
-
-    public bool Equals(VertexPair other)
-    {
-        return
-            first == other.first &&
-            second == other.second;
+        public override int GetHashCode()
+        {
+            uint hashT = (uint)first.GetHashCode();
+            uint hashU = (uint)second.GetHashCode();
+            return (int)(hashT ^ (hashU + 0x9e3779b9 + (hashT << 6) + (hashT >> 2)));
+        }
     }
 
-    public override int GetHashCode()
-    {
-        uint hashT = (uint)first.GetHashCode();
-        uint hashU = (uint)second.GetHashCode();
-        return (int)(hashT ^ (hashU + 0x9e3779b9 + (hashT << 6) + (hashT >> 2)));
-    }
-}
-
-public static unsafe class QuadDecomposition
-{
     private static bool canMergeTrianglesToQuad(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2, Vector128<float> v3)
     {
         // Maximum distance of vertices from original plane in world space units
@@ -342,7 +342,7 @@ public static unsafe class QuadDecomposition
         Vector128<float> planeDistA = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n0, Sse.Subtract(v1, v3), 0x7F));
         Vector128<float> planeDistB = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n2, Sse.Subtract(v1, v3), 0x7F));
 
-        if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(maximumDepthError)) || 
+        if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(maximumDepthError)) ||
             Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.Create(maximumDepthError)))
         {
             return false;
