@@ -4,13 +4,16 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
+using System.Threading;
 
 namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe struct Occluder
+public unsafe struct Occluder : IDisposable
 {
+    private nint _vertexData;
+
     public Vector128<float> m_center;
 
     public Vector128<float> m_refMin;
@@ -19,7 +22,7 @@ public unsafe struct Occluder
     public Vector128<float> m_boundsMin;
     public Vector128<float> m_boundsMax;
 
-    public Vector256<int>* m_vertexData;
+    public Vector256<int>* m_vertexData => (Vector256<int>*)_vertexData;
     public uint m_packetCount;
 
     public static Occluder bake(ReadOnlySpan<Vector128<float>> vertices, Vector128<float> refMin, Vector128<float> refMax)
@@ -40,7 +43,7 @@ public unsafe struct Occluder
 
             quadNormals[(uint)i / 4] = normalize(Sse.Add(normal(v0, v1, v2), normal(v0, v2, v3)));
         }
-        
+
         const int centroidsLength = 6;
         Vector128<float>* centroids = stackalloc Vector128<float>[centroidsLength];
         centroids[0] = Vector128.Create(+1.0f, 0.0f, 0.0f, 0.0f);
@@ -117,8 +120,6 @@ public unsafe struct Occluder
 
         Span<Vector128<float>> orderedVertices = CollectionsMarshal.AsSpan(orderedVertexList);
 
-        Occluder occluder = new();
-
         Vector128<float> invExtents = Sse.Divide(Vector128.Create(1.0f), Sse.Subtract(refMax, refMin));
 
         Vector128<float> scalingX = Vector128.Create(2047.0f);
@@ -127,8 +128,8 @@ public unsafe struct Occluder
 
         Vector128<float> half = Vector128.Create(0.5f);
 
-        occluder.m_packetCount = 0;
-        occluder.m_vertexData = (Vector256<int>*)NativeMemory.AlignedAlloc((uint)orderedVertices.Length * 4, 32);
+        uint packetCount = 0;
+        Vector256<int>* vertexData = (Vector256<int>*)NativeMemory.AlignedAlloc((uint)orderedVertices.Length * 4, 32);
 
         Vector128<int>* v = stackalloc Vector128<int>[8];
 
@@ -175,14 +176,11 @@ public unsafe struct Occluder
                 v[2 * j + 1] = XYZ1;
             }
 
-            occluder.m_vertexData[occluder.m_packetCount++] = Avx.LoadVector256((int*)(v + 0));
-            occluder.m_vertexData[occluder.m_packetCount++] = Avx.LoadVector256((int*)(v + 2));
-            occluder.m_vertexData[occluder.m_packetCount++] = Avx.LoadVector256((int*)(v + 4));
-            occluder.m_vertexData[occluder.m_packetCount++] = Avx.LoadVector256((int*)(v + 6));
+            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 0));
+            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 2));
+            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 4));
+            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 6));
         }
-
-        occluder.m_refMin = refMin;
-        occluder.m_refMax = refMax;
 
         Vector128<float> min = Vector128.Create(float.PositiveInfinity);
         Vector128<float> max = Vector128.Create(float.NegativeInfinity);
@@ -197,11 +195,29 @@ public unsafe struct Occluder
         min = Sse41.Blend(min, Vector128.Create(1.0f), 0b1000);
         max = Sse41.Blend(max, Vector128.Create(1.0f), 0b1000);
 
-        occluder.m_boundsMin = min;
-        occluder.m_boundsMax = max;
+        Occluder occluder = new()
+        {
+            m_packetCount = packetCount,
+            _vertexData = (nint)vertexData,
 
-        occluder.m_center = Sse.Multiply(Sse.Add(max, min), Vector128.Create(0.5f));
+            m_refMin = refMin,
+            m_refMax = refMax,
+
+            m_boundsMin = min,
+            m_boundsMax = max,
+
+            m_center = Sse.Multiply(Sse.Add(max, min), Vector128.Create(0.5f))
+        };
 
         return occluder;
+    }
+
+    public void Dispose()
+    {
+        nint vertexData = Interlocked.Exchange(ref _vertexData, 0);
+        if (vertexData != 0)
+        {
+            NativeMemory.AlignedFree((void*)vertexData);
+        }
     }
 }
