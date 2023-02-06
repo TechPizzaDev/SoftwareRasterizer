@@ -8,7 +8,7 @@ namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe class Avx2Rasterizer : Rasterizer
+public unsafe class Sse41Rasterizer : Rasterizer
 {
     private const FloatComparisonMode _CMP_LT_OQ = FloatComparisonMode.OrderedLessThanNonSignaling;
     private const FloatComparisonMode _CMP_LE_OQ = FloatComparisonMode.OrderedLessThanOrEqualNonSignaling;
@@ -16,18 +16,18 @@ public unsafe class Avx2Rasterizer : Rasterizer
 
     private const int Alignment = 256 / 8; // sizeof(Vector256<>)
 
-    public Avx2Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
+    public Sse41Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
         base(rasterizationTable, width, height, Alignment)
     {
     }
 
-    public static Avx2Rasterizer Create(RasterizationTable rasterizationTable, uint width, uint height)
+    public static Sse41Rasterizer Create(RasterizationTable rasterizationTable, uint width, uint height)
     {
         bool success = false;
         rasterizationTable.DangerousAddRef(ref success);
         if (success)
         {
-            return new Avx2Rasterizer(rasterizationTable, width, height);
+            return new Sse41Rasterizer(rasterizationTable, width, height);
         }
         throw new ObjectDisposedException(rasterizationTable.GetType().Name);
     }
