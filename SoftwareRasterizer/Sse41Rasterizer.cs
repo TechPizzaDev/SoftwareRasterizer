@@ -133,9 +133,9 @@ public unsafe class Sse41Rasterizer : Rasterizer
         Vector128<float> col3 = Sse.LoadVector128(m_modelViewProjection + 12);
 
         // Transform edges
-        Vector128<float> egde0 = Sse.Multiply(col0, Avx2.BroadcastScalarToVector128(extents));
-        Vector128<float> egde1 = Sse.Multiply(col1, Avx.Permute(extents, 0b01_01_01_01));
-        Vector128<float> egde2 = Sse.Multiply(col2, Avx.Permute(extents, 0b10_10_10_10));
+        Vector128<float> egde0 = Sse.Multiply(col0, BroadcastScalarToVector128(extents));
+        Vector128<float> egde1 = Sse.Multiply(col1, Permute(extents, 0b01_01_01_01));
+        Vector128<float> egde2 = Sse.Multiply(col2, Permute(extents, 0b10_10_10_10));
 
         Vector128<float> corners0;
         Vector128<float> corners1;
@@ -148,9 +148,9 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
         // Transform first corner
         corners0 =
-          Fma.MultiplyAdd(col0, Avx2.BroadcastScalarToVector128(boundsMin),
-            Fma.MultiplyAdd(col1, Avx.Permute(boundsMin, 0b01_01_01_01),
-              Fma.MultiplyAdd(col2, Avx.Permute(boundsMin, 0b10_10_10_10),
+          Fma.MultiplyAdd(col0, BroadcastScalarToVector128(boundsMin),
+            Fma.MultiplyAdd(col1, Permute(boundsMin, 0b01_01_01_01),
+              Fma.MultiplyAdd(col2, Permute(boundsMin, 0b10_10_10_10),
                 col3)));
 
         // Transform remaining corners by adding edge vectors
@@ -173,7 +173,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
         maxExtent = Sse.Max(maxExtent, Avx.Permute(maxExtent, 0b10_11_00_01));
         Vector128<float> nearPlaneEpsilon = Sse.Multiply(maxExtent, Vector128.Create(0.001f));
         Vector128<float> closeToNearPlane = Sse.Or(Sse.CompareLessThan(corners3, nearPlaneEpsilon), Sse.CompareLessThan(corners7, nearPlaneEpsilon));
-        if (!Avx.TestZ(closeToNearPlane, closeToNearPlane))
+        if (!TestZ(closeToNearPlane, closeToNearPlane))
         {
             needsClipping = true;
             return true;
@@ -218,7 +218,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
         // Store as scalars
         int* bounds = stackalloc int[4];
-        Sse2.Store((int*)bounds, boundsI);
+        Sse2.Store(bounds, boundsI);
 
         uint minX = (uint)bounds[0];
         uint maxX = (uint)bounds[1];
@@ -235,9 +235,9 @@ public unsafe class Sse41Rasterizer : Rasterizer
             return false;
         }
 
-        Vector128<int> depth = packDepthPremultiplied(corners2, corners6);
+        Vector128<ushort> depth = packDepthPremultiplied(corners2, corners6);
 
-        ushort maxZ = (ushort)(0xFFFF ^ Sse2.Extract(Sse41.MinHorizontal(Sse2.Xor(depth, Vector128.Create((short)-1).AsInt32()).AsUInt16()), 0));
+        ushort maxZ = (ushort)(0xFFFFu ^ Sse2.Extract(Sse41.MinHorizontal(Sse2.Xor(depth, Vector128.Create((short)-1).AsUInt16())), 0));
 
         if (!query2D(minX, maxX, minY, maxY, maxZ))
         {
@@ -486,25 +486,28 @@ public unsafe class Sse41Rasterizer : Rasterizer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<int> packDepthPremultiplied(Vector128<float> depthA, Vector128<float> depthB)
+    private static Vector128<ushort> packDepthPremultiplied(Vector128<float> depthA, Vector128<float> depthB)
     {
-        return Sse41.PackUnsignedSaturate(Sse2.ShiftRightArithmetic(depthA.AsInt32(), 12), Sse2.ShiftRightArithmetic(depthB.AsInt32(), 12)).AsInt32();
+        Vector128<int> x1 = Sse2.ShiftRightArithmetic(depthA.AsInt32(), 12);
+        Vector128<int> x2 = Sse2.ShiftRightArithmetic(depthB.AsInt32(), 12);
+
+        return Sse41.PackUnsignedSaturate(x1, x2);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<int> packDepthPremultiplied(Vector256<float> depth)
+    private static Vector128<ushort> packDepthPremultiplied(Vector256<float> depth)
     {
         Vector256<int> x = Avx2.ShiftRightArithmetic(depth.AsInt32(), 12);
-        return Sse41.PackUnsignedSaturate(x.GetLower(), Avx2.ExtractVector128(x, 1)).AsInt32();
+        return Sse41.PackUnsignedSaturate(x.GetLower(), x.GetUpper());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector256<int> packDepthPremultiplied(Vector256<float> depthA, Vector256<float> depthB)
+    private static Vector256<ushort> packDepthPremultiplied(Vector256<float> depthA, Vector256<float> depthB)
     {
         Vector256<int> x1 = Avx2.ShiftRightArithmetic(depthA.AsInt32(), 12);
         Vector256<int> x2 = Avx2.ShiftRightArithmetic(depthB.AsInt32(), 12);
 
-        return Avx2.PackUnsignedSaturate(x1, x2).AsInt32();
+        return Avx2.PackUnsignedSaturate(x1, x2);
     }
 
     public override void rasterize<T>(in Occluder occluder)
@@ -905,9 +908,9 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 maxZ = Avx.BlendVariable(maxZ, Vector256.Create(1.0f), Avx.Or(Avx.Or(wSign0, wSign1), Avx.Or(wSign2, wSign3)));
             }
 
-            Vector128<int> packedDepthBounds = packDepthPremultiplied(maxZ);
+            Vector128<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
 
-            Sse2.StoreAligned((int*)depthBounds, packedDepthBounds);
+            Sse2.StoreAligned(depthBounds, packedDepthBounds);
 
             // Compute screen space depth plane
             Vector256<float> greaterArea = Avx.Compare(Avx.AndNot(minusZero256, area0), Avx.AndNot(minusZero256, area2), _CMP_LT_OQ);
@@ -1054,13 +1057,11 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
         const float depthSamplePos = -0.5f + 1.0f / 16.0f;
 
-        Vector256<float> depthSamplePosFactor1 = Vector256.Create(
-            depthSamplePos + 0.0f, depthSamplePos + 0.125f, depthSamplePos + 0.25f, depthSamplePos + 0.375f,
+        Vector128<float> depthSamplePosFactor1 = Vector128.Create(
             depthSamplePos + 0.0f, depthSamplePos + 0.125f, depthSamplePos + 0.25f, depthSamplePos + 0.375f);
 
-        Vector256<float> depthSamplePosFactor2 = Vector256.Create(
-            depthSamplePos + 0.0f, depthSamplePos + 0.0f, depthSamplePos + 0.0f, depthSamplePos + 0.0f,
-            depthSamplePos + 0.125f, depthSamplePos + 0.125f, depthSamplePos + 0.125f, depthSamplePos + 0.125f);
+        Vector128<float> depthSamplePosFactor2A = Vector128.Create(depthSamplePos);
+        Vector128<float> depthSamplePosFactor2B = Vector128.Create(depthSamplePos + 0.125f);
 
         // Loop over set bits
         while (validMask != 0)
@@ -1075,13 +1076,20 @@ public unsafe class Sse41Rasterizer : Rasterizer
             // Extract and prepare per-primitive data
             ushort primitiveMaxZ = depthBounds[primitiveIdx];
 
-            Vector256<float> depthDx = Avx2.BroadcastScalarToVector256(Avx.Permute(Sse.LoadAlignedVector128((float*)(depthPlane + primitiveIdxTransposed)), 0b01_01_01_01));
-            Vector256<float> depthDy = Avx2.BroadcastScalarToVector256(Avx.Permute(Sse.LoadAlignedVector128((float*)(depthPlane + primitiveIdxTransposed)), 0b10_10_10_10));
+            Vector128<float> depthDx = BroadcastScalarToVector128(Permute(Sse.LoadAlignedVector128((float*)(depthPlane + primitiveIdxTransposed)), 0b01_01_01_01));
+            Vector128<float> depthDy = BroadcastScalarToVector128(Permute(Sse.LoadAlignedVector128((float*)(depthPlane + primitiveIdxTransposed)), 0b10_10_10_10));
 
-            Vector256<float> lineDepth =
+            Vector128<float> lineDepthTerm = BroadcastScalarToVector128(depthPlane[primitiveIdxTransposed]);
+
+            Vector128<float> lineDepthA =
               Fma.MultiplyAdd(depthDx, depthSamplePosFactor1,
-                Fma.MultiplyAdd(depthDy, depthSamplePosFactor2,
-                  Avx2.BroadcastScalarToVector256(depthPlane[primitiveIdxTransposed])));
+                Fma.MultiplyAdd(depthDy, depthSamplePosFactor2A,
+                  lineDepthTerm));
+
+            Vector128<float> lineDepthB =
+              Fma.MultiplyAdd(depthDx, depthSamplePosFactor1,
+                Fma.MultiplyAdd(depthDy, depthSamplePosFactor2B,
+                  lineDepthTerm));
 
             Vector128<int> slopeLookup = Sse2.LoadAlignedVector128((int*)(slopeLookups + primitiveIdxTransposed));
             Vector128<float> edgeNormalX = Sse.LoadAlignedVector128((float*)(edgeNormalsX + primitiveIdxTransposed));
@@ -1095,7 +1103,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
             uint blockRangeY = rangesY[primitiveIdx];
 
             ushort* pPrimitiveHiZ = pHiZBuffer + firstBlock;
-            Vector256<int>* pPrimitiveOut = (Vector256<int>*)pDepthBuffer + 4 * firstBlock;
+            Vector128<int>* pPrimitiveOut = pDepthBuffer + 8 * firstBlock;
 
             uint primitiveMode = primModes[primitiveIdx];
 
@@ -1103,23 +1111,26 @@ public unsafe class Sse41Rasterizer : Rasterizer
               blockY < blockRangeY;
               ++blockY,
               pPrimitiveHiZ += blocksX,
-              pPrimitiveOut += 4 * blocksX,
-              lineDepth = Avx.Add(lineDepth, depthDy),
+              pPrimitiveOut += 8 * blocksX,
+              lineDepthA = Sse.Add(lineDepthA, depthDy),
+              lineDepthB = Sse.Add(lineDepthB, depthDy),
               lineOffset = Sse.Add(lineOffset, edgeNormalY))
             {
                 ushort* pBlockRowHiZ = pPrimitiveHiZ;
-                Vector256<int>* @out = pPrimitiveOut;
+                Vector128<int>* @out = pPrimitiveOut;
 
                 Vector128<float> offset = lineOffset;
-                Vector256<float> depth = lineDepth;
+                Vector128<float> depthA = lineDepthA;
+                Vector128<float> depthB = lineDepthB;
 
                 bool anyBlockHit = false;
                 for (uint blockX = 0;
                   blockX < blockRangeX;
                   ++blockX,
                   pBlockRowHiZ += 1,
-                  @out += 4,
-                  depth = Avx.Add(depthDx, depth),
+                  @out += 8,
+                  depthA = Sse.Add(depthDx, depthA),
+                  depthB = Sse.Add(depthDx, depthB),
                   offset = Sse.Add(edgeNormalX, offset))
                 {
                     ushort hiZ = *pBlockRowHiZ;
@@ -1133,7 +1144,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
                     {
                         // Simplified conservative test: combined block mask will be zero if any offset is outside of range
                         Vector128<float> anyOffsetOutsideMask = Sse.CompareGreaterThanOrEqual(offset, Vector128.Create((float)(OFFSET_QUANTIZATION_FACTOR - 1)));
-                        if (!Avx.TestZ(anyOffsetOutsideMask, anyOffsetOutsideMask))
+                        if (!TestZ(anyOffsetOutsideMask, anyOffsetOutsideMask))
                         {
                             if (anyBlockHit)
                             {
@@ -1211,57 +1222,105 @@ public unsafe class Sse41Rasterizer : Rasterizer
                     }
 
                     // Generate depth values around block
-                    Vector256<float> depth0 = depth;
-                    Vector256<float> depth1 = Fma.MultiplyAdd(depthDx, Vector256.Create(0.5f), depth0);
-                    Vector256<float> depth8 = Avx.Add(depthDy, depth0);
-                    Vector256<float> depth9 = Avx.Add(depthDy, depth1);
+                    Vector128<float> depth0_A = depthA;
+                    Vector128<float> depth1_A = Fma.MultiplyAdd(depthDx, Vector128.Create(0.5f), depth0_A);
+                    Vector128<float> depth8_A = Sse.Add(depthDy, depth0_A);
+                    Vector128<float> depth9_A = Sse.Add(depthDy, depth1_A);
+
+                    Vector128<float> depth0_B = depthB;
+                    Vector128<float> depth1_B = Fma.MultiplyAdd(depthDx, Vector128.Create(0.5f), depth0_B);
+                    Vector128<float> depth8_B = Sse.Add(depthDy, depth0_B);
+                    Vector128<float> depth9_B = Sse.Add(depthDy, depth1_B);
 
                     // Pack depth
-                    Vector256<int> d0 = packDepthPremultiplied(depth0, depth1);
-                    Vector256<int> d4 = packDepthPremultiplied(depth8, depth9);
+                    Vector128<ushort> d0_A = packDepthPremultiplied(depth0_A, depth1_A);
+                    Vector128<ushort> d4_A = packDepthPremultiplied(depth8_A, depth9_A);
+
+                    Vector128<ushort> d0_B = packDepthPremultiplied(depth0_B, depth1_B);
+                    Vector128<ushort> d4_B = packDepthPremultiplied(depth8_B, depth9_B);
 
                     // Interpolate remaining values in packed space
-                    Vector256<int> d2 = Avx2.Average(d0.AsUInt16(), d4.AsUInt16()).AsInt32();
-                    Vector256<int> d1 = Avx2.Average(d0.AsUInt16(), d2.AsUInt16()).AsInt32();
-                    Vector256<int> d3 = Avx2.Average(d2.AsUInt16(), d4.AsUInt16()).AsInt32();
+                    Vector128<ushort> d2_A = Sse2.Average(d0_A, d4_A);
+                    Vector128<ushort> d1_A = Sse2.Average(d0_A, d2_A);
+                    Vector128<ushort> d3_A = Sse2.Average(d2_A, d4_A);
+
+                    Vector128<ushort> d2_B = Sse2.Average(d0_B, d4_B);
+                    Vector128<ushort> d1_B = Sse2.Average(d0_B, d2_B);
+                    Vector128<ushort> d3_B = Sse2.Average(d2_B, d4_B);
 
                     // Not all pixels covered - mask depth 
                     if (blockMask != 0xffff_ffff_ffff_ffff)
                     {
-                        Vector128<int> A = Vector128.CreateScalar((long)blockMask).AsInt32();
-                        Vector128<int> B = Sse2.ShiftLeftLogical(A.AsInt16(), 4).AsInt32();
-                        Vector256<int> C = Avx2.InsertVector128(A.ToVector256Unsafe(), B, 1);
-                        Vector256<short> rowMask = Avx2.UnpackLow(C.AsByte(), C.AsByte()).AsInt16();
+                        Vector128<ushort> A = Vector128.CreateScalar((long)blockMask).AsUInt16();
+                        Vector128<ushort> B = Sse2.ShiftLeftLogical(A.AsInt16(), 4).AsUInt16();
 
-                        d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), Avx2.ShiftLeftLogical(rowMask, 3).AsByte()).AsInt32();
-                        d1 = Avx2.BlendVariable(Vector256<byte>.Zero, d1.AsByte(), Avx2.ShiftLeftLogical(rowMask, 2).AsByte()).AsInt32();
-                        d2 = Avx2.BlendVariable(Vector256<byte>.Zero, d2.AsByte(), Avx2.Add(rowMask, rowMask).AsByte()).AsInt32();
-                        d3 = Avx2.BlendVariable(Vector256<byte>.Zero, d3.AsByte(), rowMask.AsByte()).AsInt32();
+                        Vector128<byte> C_A = Sse41.Blend(A, B, 0b11_11_00_00).AsByte();
+                        Vector128<byte> C_B = Sse41.Blend(A, B, 0b00_00_11_11).AsByte();
+
+                        Vector128<short> rowMask_A = Sse2.UnpackLow(C_A, C_A).AsInt16();
+                        Vector128<short> rowMask_B = Sse2.UnpackLow(C_B, C_B).AsInt16();
+
+                        d0_A = Sse41.BlendVariable(Vector128<byte>.Zero, d0_A.AsByte(), Sse2.ShiftLeftLogical(rowMask_A, 3).AsByte()).AsUInt16();
+                        d1_A = Sse41.BlendVariable(Vector128<byte>.Zero, d1_A.AsByte(), Sse2.ShiftLeftLogical(rowMask_A, 2).AsByte()).AsUInt16();
+                        d2_A = Sse41.BlendVariable(Vector128<byte>.Zero, d2_A.AsByte(), Sse2.Add(rowMask_A, rowMask_A).AsByte()).AsUInt16();
+                        d3_A = Sse41.BlendVariable(Vector128<byte>.Zero, d3_A.AsByte(), rowMask_A.AsByte()).AsUInt16();
+
+                        d0_B = Sse41.BlendVariable(Vector128<byte>.Zero, d0_B.AsByte(), Sse2.ShiftLeftLogical(rowMask_B, 3).AsByte()).AsUInt16();
+                        d1_B = Sse41.BlendVariable(Vector128<byte>.Zero, d1_B.AsByte(), Sse2.ShiftLeftLogical(rowMask_B, 2).AsByte()).AsUInt16();
+                        d2_B = Sse41.BlendVariable(Vector128<byte>.Zero, d2_B.AsByte(), Sse2.Add(rowMask_B, rowMask_B).AsByte()).AsUInt16();
+                        d3_B = Sse41.BlendVariable(Vector128<byte>.Zero, d3_B.AsByte(), rowMask_B.AsByte()).AsUInt16();
                     }
 
                     // Test fast clear flag
                     if (hiZ != 1)
                     {
                         // Merge depth values
-                        d0 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 0)).AsUInt16(), d0.AsUInt16()).AsInt32();
-                        d1 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 1)).AsUInt16(), d1.AsUInt16()).AsInt32();
-                        d2 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 2)).AsUInt16(), d2.AsUInt16()).AsInt32();
-                        d3 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 3)).AsUInt16(), d3.AsUInt16()).AsInt32();
+                        d0_A = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 0)), d0_A);
+                        d0_B = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 1)), d0_B);
+                        d1_A = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 2)), d1_A);
+                        d1_B = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 3)), d1_B);
+
+                        d2_A = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 4)), d2_A);
+                        d2_B = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 5)), d2_B);
+                        d3_A = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 6)), d3_A);
+                        d3_B = Sse41.Max(Sse2.LoadAlignedVector128((ushort*)(@out + 7)), d3_B);
                     }
 
                     // Store back new depth
-                    Avx.StoreAligned((int*)(@out + 0), d0);
-                    Avx.StoreAligned((int*)(@out + 1), d1);
-                    Avx.StoreAligned((int*)(@out + 2), d2);
-                    Avx.StoreAligned((int*)(@out + 3), d3);
+                    Sse2.StoreAligned((ushort*)(@out + 0), d0_A);
+                    Sse2.StoreAligned((ushort*)(@out + 1), d0_B);
+                    Sse2.StoreAligned((ushort*)(@out + 2), d1_A);
+                    Sse2.StoreAligned((ushort*)(@out + 3), d1_B);
+
+                    Sse2.StoreAligned((ushort*)(@out + 4), d2_A);
+                    Sse2.StoreAligned((ushort*)(@out + 5), d2_B);
+                    Sse2.StoreAligned((ushort*)(@out + 6), d3_A);
+                    Sse2.StoreAligned((ushort*)(@out + 7), d3_B);
 
                     // Update HiZ
-                    Vector256<int> newMinZ = Avx2.Min(Avx2.Min(d0.AsUInt16(), d1.AsUInt16()), Avx2.Min(d2.AsUInt16(), d3.AsUInt16())).AsInt32();
-                    Vector128<int> newMinZ16 = Sse41.MinHorizontal(Sse41.Min(newMinZ.GetLower().AsUInt16(), Avx2.ExtractVector128(newMinZ, 1).AsUInt16())).AsInt32();
+                    Vector128<ushort> newMinZ_A = Sse41.Min(Sse41.Min(d0_A, d1_A), Sse41.Min(d2_A, d3_A));
+                    Vector128<ushort> newMinZ_B = Sse41.Min(Sse41.Min(d0_B, d1_B), Sse41.Min(d2_B, d3_B));
+                    Vector128<int> newMinZ16 = Sse41.MinHorizontal(Sse41.Min(newMinZ_A, newMinZ_B)).AsInt32();
 
                     *pBlockRowHiZ = (ushort)(uint)Sse2.ConvertToInt32(newMinZ16);
                 }
             }
         }
+    }
+
+    private static bool TestZ(Vector128<float> a, Vector128<float> b)
+    {
+        Vector128<float> mask = Vector128.Create(0x80000000u).AsSingle();
+        return Sse41.TestZ(Sse.And(a, mask).AsUInt32(), Sse.And(b, mask).AsUInt32());
+    }
+
+    private static Vector128<float> Permute(Vector128<float> a, byte imm8)
+    {
+        return Sse.Shuffle(a, a, imm8);
+    }
+
+    private static Vector128<float> BroadcastScalarToVector128(Vector128<float> a)
+    {
+        return Vector128.Create(a.ToScalar());
     }
 }

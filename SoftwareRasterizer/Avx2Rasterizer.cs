@@ -218,7 +218,7 @@ public unsafe class Avx2Rasterizer : Rasterizer
 
         // Store as scalars
         int* bounds = stackalloc int[4];
-        Sse2.Store((int*)bounds, boundsI);
+        Sse2.Store(bounds, boundsI);
 
         uint minX = (uint)bounds[0];
         uint maxX = (uint)bounds[1];
@@ -235,9 +235,9 @@ public unsafe class Avx2Rasterizer : Rasterizer
             return false;
         }
 
-        Vector128<int> depth = packDepthPremultiplied(corners2, corners6);
+        Vector128<ushort> depth = packDepthPremultiplied(corners2, corners6);
 
-        ushort maxZ = (ushort)(0xFFFF ^ Sse2.Extract(Sse41.MinHorizontal(Sse2.Xor(depth, Vector128.Create((short)-1).AsInt32()).AsUInt16()), 0));
+        ushort maxZ = (ushort)(0xFFFFu ^ Sse2.Extract(Sse41.MinHorizontal(Sse2.Xor(depth, Vector128.Create((short)-1).AsUInt16())), 0));
 
         if (!query2D(minX, maxX, minY, maxY, maxZ))
         {
@@ -486,25 +486,28 @@ public unsafe class Avx2Rasterizer : Rasterizer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<int> packDepthPremultiplied(Vector128<float> depthA, Vector128<float> depthB)
+    private static Vector128<ushort> packDepthPremultiplied(Vector128<float> depthA, Vector128<float> depthB)
     {
-        return Sse41.PackUnsignedSaturate(Sse2.ShiftRightArithmetic(depthA.AsInt32(), 12), Sse2.ShiftRightArithmetic(depthB.AsInt32(), 12)).AsInt32();
+        Vector128<int> x1 = Sse2.ShiftRightArithmetic(depthA.AsInt32(), 12);
+        Vector128<int> x2 = Sse2.ShiftRightArithmetic(depthB.AsInt32(), 12);
+
+        return Sse41.PackUnsignedSaturate(x1, x2);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<int> packDepthPremultiplied(Vector256<float> depth)
+    private static Vector128<ushort> packDepthPremultiplied(Vector256<float> depth)
     {
         Vector256<int> x = Avx2.ShiftRightArithmetic(depth.AsInt32(), 12);
-        return Sse41.PackUnsignedSaturate(x.GetLower(), Avx2.ExtractVector128(x, 1)).AsInt32();
+        return Sse41.PackUnsignedSaturate(x.GetLower(), x.GetUpper());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector256<int> packDepthPremultiplied(Vector256<float> depthA, Vector256<float> depthB)
+    private static Vector256<ushort> packDepthPremultiplied(Vector256<float> depthA, Vector256<float> depthB)
     {
         Vector256<int> x1 = Avx2.ShiftRightArithmetic(depthA.AsInt32(), 12);
         Vector256<int> x2 = Avx2.ShiftRightArithmetic(depthB.AsInt32(), 12);
 
-        return Avx2.PackUnsignedSaturate(x1, x2).AsInt32();
+        return Avx2.PackUnsignedSaturate(x1, x2);
     }
 
     public override void rasterize<T>(in Occluder occluder)
@@ -905,9 +908,9 @@ public unsafe class Avx2Rasterizer : Rasterizer
                 maxZ = Avx.BlendVariable(maxZ, Vector256.Create(1.0f), Avx.Or(Avx.Or(wSign0, wSign1), Avx.Or(wSign2, wSign3)));
             }
 
-            Vector128<int> packedDepthBounds = packDepthPremultiplied(maxZ);
+            Vector128<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
 
-            Sse2.StoreAligned((int*)depthBounds, packedDepthBounds);
+            Sse2.StoreAligned(depthBounds, packedDepthBounds);
 
             // Compute screen space depth plane
             Vector256<float> greaterArea = Avx.Compare(Avx.AndNot(minusZero256, area0), Avx.AndNot(minusZero256, area2), _CMP_LT_OQ);
@@ -1217,13 +1220,13 @@ public unsafe class Avx2Rasterizer : Rasterizer
                     Vector256<float> depth9 = Avx.Add(depthDy, depth1);
 
                     // Pack depth
-                    Vector256<int> d0 = packDepthPremultiplied(depth0, depth1);
-                    Vector256<int> d4 = packDepthPremultiplied(depth8, depth9);
+                    Vector256<ushort> d0 = packDepthPremultiplied(depth0, depth1);
+                    Vector256<ushort> d4 = packDepthPremultiplied(depth8, depth9);
 
                     // Interpolate remaining values in packed space
-                    Vector256<int> d2 = Avx2.Average(d0.AsUInt16(), d4.AsUInt16()).AsInt32();
-                    Vector256<int> d1 = Avx2.Average(d0.AsUInt16(), d2.AsUInt16()).AsInt32();
-                    Vector256<int> d3 = Avx2.Average(d2.AsUInt16(), d4.AsUInt16()).AsInt32();
+                    Vector256<ushort> d2 = Avx2.Average(d0, d4);
+                    Vector256<ushort> d1 = Avx2.Average(d0, d2);
+                    Vector256<ushort> d3 = Avx2.Average(d2, d4);
 
                     // Not all pixels covered - mask depth 
                     if (blockMask != 0xffff_ffff_ffff_ffff)
@@ -1233,31 +1236,31 @@ public unsafe class Avx2Rasterizer : Rasterizer
                         Vector256<int> C = Avx2.InsertVector128(A.ToVector256Unsafe(), B, 1);
                         Vector256<short> rowMask = Avx2.UnpackLow(C.AsByte(), C.AsByte()).AsInt16();
 
-                        d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), Avx2.ShiftLeftLogical(rowMask, 3).AsByte()).AsInt32();
-                        d1 = Avx2.BlendVariable(Vector256<byte>.Zero, d1.AsByte(), Avx2.ShiftLeftLogical(rowMask, 2).AsByte()).AsInt32();
-                        d2 = Avx2.BlendVariable(Vector256<byte>.Zero, d2.AsByte(), Avx2.Add(rowMask, rowMask).AsByte()).AsInt32();
-                        d3 = Avx2.BlendVariable(Vector256<byte>.Zero, d3.AsByte(), rowMask.AsByte()).AsInt32();
+                        d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), Avx2.ShiftLeftLogical(rowMask, 3).AsByte()).AsUInt16();
+                        d1 = Avx2.BlendVariable(Vector256<byte>.Zero, d1.AsByte(), Avx2.ShiftLeftLogical(rowMask, 2).AsByte()).AsUInt16();
+                        d2 = Avx2.BlendVariable(Vector256<byte>.Zero, d2.AsByte(), Avx2.Add(rowMask, rowMask).AsByte()).AsUInt16();
+                        d3 = Avx2.BlendVariable(Vector256<byte>.Zero, d3.AsByte(), rowMask.AsByte()).AsUInt16();
                     }
 
                     // Test fast clear flag
                     if (hiZ != 1)
                     {
                         // Merge depth values
-                        d0 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 0)).AsUInt16(), d0.AsUInt16()).AsInt32();
-                        d1 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 1)).AsUInt16(), d1.AsUInt16()).AsInt32();
-                        d2 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 2)).AsUInt16(), d2.AsUInt16()).AsInt32();
-                        d3 = Avx2.Max(Avx.LoadAlignedVector256((int*)(@out + 3)).AsUInt16(), d3.AsUInt16()).AsInt32();
+                        d0 = Avx2.Max(Avx.LoadAlignedVector256((ushort*)(@out + 0)), d0);
+                        d1 = Avx2.Max(Avx.LoadAlignedVector256((ushort*)(@out + 1)), d1);
+                        d2 = Avx2.Max(Avx.LoadAlignedVector256((ushort*)(@out + 2)), d2);
+                        d3 = Avx2.Max(Avx.LoadAlignedVector256((ushort*)(@out + 3)), d3);
                     }
 
                     // Store back new depth
-                    Avx.StoreAligned((int*)(@out + 0), d0);
-                    Avx.StoreAligned((int*)(@out + 1), d1);
-                    Avx.StoreAligned((int*)(@out + 2), d2);
-                    Avx.StoreAligned((int*)(@out + 3), d3);
+                    Avx.StoreAligned((ushort*)(@out + 0), d0);
+                    Avx.StoreAligned((ushort*)(@out + 1), d1);
+                    Avx.StoreAligned((ushort*)(@out + 2), d2);
+                    Avx.StoreAligned((ushort*)(@out + 3), d3);
 
                     // Update HiZ
-                    Vector256<int> newMinZ = Avx2.Min(Avx2.Min(d0.AsUInt16(), d1.AsUInt16()), Avx2.Min(d2.AsUInt16(), d3.AsUInt16())).AsInt32();
-                    Vector128<int> newMinZ16 = Sse41.MinHorizontal(Sse41.Min(newMinZ.GetLower().AsUInt16(), Avx2.ExtractVector128(newMinZ, 1).AsUInt16())).AsInt32();
+                    Vector256<ushort> newMinZ = Avx2.Min(Avx2.Min(d0, d1), Avx2.Min(d2, d3));
+                    Vector128<int> newMinZ16 = Sse41.MinHorizontal(Sse41.Min(newMinZ.GetLower(), newMinZ.GetUpper())).AsInt32();
 
                     *pBlockRowHiZ = (ushort)(uint)Sse2.ConvertToInt32(newMinZ16);
                 }
