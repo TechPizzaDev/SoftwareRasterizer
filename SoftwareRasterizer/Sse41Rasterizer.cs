@@ -327,7 +327,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
         Vector256<float>* linDepthA = (Vector256<float>*)alignedBuffer;
 
-        for (uint blockY = 4; blockY < m_blocksY; ++blockY)
+        for (uint blockY = 0; blockY < m_blocksY; ++blockY)
         {
             for (uint blockX = 0; blockX < m_blocksX; ++blockX)
             {
