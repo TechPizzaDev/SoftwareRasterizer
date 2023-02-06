@@ -388,13 +388,13 @@ public unsafe class Avx2Rasterizer : Rasterizer
                     Vector256<ushort> vG16_1 = Avx2.And(Avx2.PackUnsignedSaturate(vG32_2, vG32_3), vMask);
                     Vector256<byte> vG8 = Avx2.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
 
-                    Vector256<byte> vRG_Lo = Avx2.UnpackLow(vR8, vG8);
-                    Vector256<byte> vRG_Hi = Avx2.UnpackHigh(vR8, vG8);
+                    Vector256<ushort> vRG_Lo = Avx2.UnpackLow(vR8, vG8).AsUInt16();
+                    Vector256<ushort> vRG_Hi = Avx2.UnpackHigh(vR8, vG8).AsUInt16();
 
-                    Vector256<uint> result1 = Avx2.UnpackLow(vRG_Lo.AsUInt16(), vZeroMax).AsUInt32();
-                    Vector256<uint> result2 = Avx2.UnpackHigh(vRG_Lo.AsUInt16(), vZeroMax).AsUInt32();
-                    Vector256<uint> result3 = Avx2.UnpackLow(vRG_Hi.AsUInt16(), vZeroMax).AsUInt32();
-                    Vector256<uint> result4 = Avx2.UnpackHigh(vRG_Hi.AsUInt16(), vZeroMax).AsUInt32();
+                    Vector256<uint> result1 = Avx2.UnpackLow(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector256<uint> result2 = Avx2.UnpackHigh(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector256<uint> result3 = Avx2.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
+                    Vector256<uint> result4 = Avx2.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
 
                     Avx.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))), result1);
                     Avx.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))), result2);
