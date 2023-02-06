@@ -406,15 +406,6 @@ public unsafe class Avx2Rasterizer : Rasterizer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static float decompressFloat(ushort depth)
-    {
-        const float bias = 3.9623753e+28f; // 1.0f / floatCompressionBias
-
-        uint u = (uint)depth << 12;
-        return BitConverter.UInt32BitsToSingle(u) * bias;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void transpose256(Vector256<float> A, Vector256<float> B, Vector256<float> C, Vector256<float> D, Vector128<float>* @out)
     {
         Vector256<float> _Tmp0 = Avx.Shuffle(A, B, 0x44);
