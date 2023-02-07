@@ -305,10 +305,10 @@ public static unsafe class QuadDecomposition
         }
     }
 
-    private struct VertexPair : IEquatable<VertexPair>
+    private readonly struct VertexPair : IEquatable<VertexPair>
     {
-        public uint first;
-        public uint second;
+        public readonly uint first;
+        public readonly uint second;
 
         public VertexPair(uint first, uint second)
         {
@@ -328,6 +328,11 @@ public static unsafe class QuadDecomposition
             uint hashT = (uint)first.GetHashCode();
             uint hashU = (uint)second.GetHashCode();
             return (int)(hashT ^ (hashU + 0x9e3779b9 + (hashT << 6) + (hashT >> 2)));
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is VertexPair value && Equals(value);
         }
     }
 

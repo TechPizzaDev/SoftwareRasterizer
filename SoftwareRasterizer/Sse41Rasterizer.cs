@@ -10,7 +10,7 @@ using static VectorMath;
 
 public unsafe class Sse41Rasterizer : Rasterizer
 {
-    private const int Alignment = 256 / 8; // sizeof(Vector256<>)
+    private const int Alignment = 128 / 8; // sizeof(Vector128<>)
 
     public Sse41Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
         base(rasterizationTable, width, height, Alignment)

@@ -2,7 +2,11 @@
 
 namespace SoftwareRasterizer;
 
+#pragma warning disable CS0660 // Type defines operator == or operator != but does not override Object.Equals(object o)
+#pragma warning disable CS0661 // Type defines operator == or operator != but does not override Object.GetHashCode()
 public readonly ref struct Ref<T>
+#pragma warning restore CS0661
+#pragma warning restore CS0660
 {
     public readonly ref T Value;
 

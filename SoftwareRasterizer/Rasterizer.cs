@@ -6,6 +6,7 @@ using System.Runtime.Intrinsics;
 using System.Threading;
 
 namespace SoftwareRasterizer;
+
 public abstract unsafe partial class Rasterizer : IRasterizer
 {
     public readonly struct NearClipped : IPossiblyNearClipped
