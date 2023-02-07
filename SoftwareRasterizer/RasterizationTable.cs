@@ -11,26 +11,39 @@ using static Rasterizer;
 
 public sealed unsafe class RasterizationTable : SafeHandle
 {
+    private const uint angularResolution = 2000;
+    private const uint offsetResolution = 2000;
+
     public override bool IsInvalid => handle == IntPtr.Zero;
 
     public RasterizationTable() : base(0, true)
     {
-        handle = (IntPtr)precomputeRasterizationTable();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    private static ulong* precomputeRasterizationTable()
-    {
-        const uint angularResolution = 2000;
-        const uint offsetResolution = 2000;
-
-        uint precomputedRasterTablesByteCount = Rasterizer.OFFSET_QUANTIZATION_FACTOR * Rasterizer.SLOPE_QUANTIZATION_FACTOR * sizeof(ulong);
+        uint precomputedRasterTablesByteCount = OFFSET_QUANTIZATION_FACTOR * SLOPE_QUANTIZATION_FACTOR * sizeof(ulong);
         ulong* precomputedRasterTables = (ulong*)NativeMemory.AlignedAlloc(
             byteCount: precomputedRasterTablesByteCount,
             alignment: sizeof(ulong));
 
         Unsafe.InitBlockUnaligned(precomputedRasterTables, 0, precomputedRasterTablesByteCount);
 
+        if (Avx2.IsSupported)
+        {
+            ComputeRasterizationTableAvx2(precomputedRasterTables);
+        }
+        else if (Sse.IsSupported)
+        {
+            ComputeRasterizationTableSse(precomputedRasterTables);
+        }
+        else
+        {
+            ComputeRasterizationTableScalar(precomputedRasterTables);
+        }
+
+        handle = (IntPtr)precomputedRasterTables;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static void ComputeRasterizationTableAvx2(ulong* table)
+    {
         for (uint i = 0; i < angularResolution; ++i)
         {
             float angle = -0.1f + 6.4f * i / (angularResolution - 1);
@@ -41,7 +54,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
             nx *= l;
             ny *= l;
 
-            uint slopeLookup = (uint)Sse41.Extract(quantizeSlopeLookup(Vector128.Create(nx), Vector128.Create(ny)), 0);
+            uint slopeLookup = (uint)quantizeSlopeLookup(nx, ny);
 
             Vector256<float> inc = Vector256.Create(
                 (0 - 3.5f) / 8f,
@@ -75,15 +88,120 @@ public sealed unsafe class RasterizationTable : SafeHandle
                     block |= expandMask(mask) << y;
                 }
 
-                precomputedRasterTables[lookup] |= transposeMask(block);
+                table[lookup] |= transposeMask(block);
             }
 
             // For each slope, the first block should be all ones, the last all zeroes
-            Debug.Assert(precomputedRasterTables[slopeLookup] == 0xffff_ffff_ffff_ffff);
-            Debug.Assert(precomputedRasterTables[slopeLookup + OFFSET_QUANTIZATION_FACTOR - 1] == 0);
+            Debug.Assert(table[slopeLookup] == 0xffff_ffff_ffff_ffff);
+            Debug.Assert(table[slopeLookup + OFFSET_QUANTIZATION_FACTOR - 1] == 0);
         }
+    }
 
-        return precomputedRasterTables;
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static void ComputeRasterizationTableSse(ulong* table)
+    {
+        for (uint i = 0; i < angularResolution; ++i)
+        {
+            float angle = -0.1f + 6.4f * i / (angularResolution - 1);
+
+            (float ny, float nx) = MathF.SinCos(angle);
+            float l = 1.0f / (MathF.Abs(nx) + MathF.Abs(ny));
+
+            nx *= l;
+            ny *= l;
+
+            uint slopeLookup = (uint)quantizeSlopeLookup(nx, ny);
+
+            Vector128<float> inc1 = Vector128.Create(
+                (0 - 3.5f) / 8f,
+                (1 - 3.5f) / 8f,
+                (2 - 3.5f) / 8f,
+                (3 - 3.5f) / 8f);
+
+            Vector128<float> inc2 = Vector128.Create(
+                (4 - 3.5f) / 8f,
+                (5 - 3.5f) / 8f,
+                (6 - 3.5f) / 8f,
+                (7 - 3.5f) / 8f);
+
+            Vector128<float> incX1 = Sse.Multiply(inc1, Vector128.Create(nx));
+            Vector128<float> incX2 = Sse.Multiply(inc2, Vector128.Create(nx));
+
+            for (uint j = 0; j < offsetResolution; ++j)
+            {
+                float offset = -0.6f + 1.2f * j / (angularResolution - 1);
+
+                uint offsetLookup = quantizeOffsetLookup(offset);
+
+                uint lookup = slopeLookup | offsetLookup;
+
+                ulong block = 0;
+
+                for (int y = 0; y < 8; ++y)
+                {
+                    Vector128<float> o = Vector128.Create(offset + (y - 3.5f) / 8.0f * ny);
+                    Vector128<float> edgeDistance1 = Sse.Add(o, incX1);
+                    Vector128<float> edgeDistance2 = Sse.Add(o, incX2);
+                    Vector128<float> cmp1 = Sse.CompareLessThanOrEqual(edgeDistance1, Vector128<float>.Zero);
+                    Vector128<float> cmp2 = Sse.CompareLessThanOrEqual(edgeDistance2, Vector128<float>.Zero);
+
+                    uint mask = (uint)Sse.MoveMask(cmp1) | (uint)(Sse.MoveMask(cmp2) << 4);
+                    block |= expandMask(mask) << y;
+                }
+
+                table[lookup] |= transposeMask(block);
+            }
+
+            // For each slope, the first block should be all ones, the last all zeroes
+            Debug.Assert(table[slopeLookup] == 0xffff_ffff_ffff_ffff);
+            Debug.Assert(table[slopeLookup + OFFSET_QUANTIZATION_FACTOR - 1] == 0);
+        }
+    }
+
+    private static void ComputeRasterizationTableScalar(ulong* table)
+    {
+        for (uint i = 0; i < angularResolution; ++i)
+        {
+            float angle = -0.1f + 6.4f * i / (angularResolution - 1);
+
+            (float ny, float nx) = MathF.SinCos(angle);
+            float l = 1.0f / (MathF.Abs(nx) + MathF.Abs(ny));
+
+            nx *= l;
+            ny *= l;
+
+            uint slopeLookup = (uint)quantizeSlopeLookup(nx, ny);
+
+            for (uint j = 0; j < offsetResolution; ++j)
+            {
+                float offset = -0.6f + 1.2f * j / (angularResolution - 1);
+
+                uint offsetLookup = quantizeOffsetLookup(offset);
+
+                uint lookup = slopeLookup | offsetLookup;
+
+                ulong block = 0;
+
+                for (int x = 0; x < 8; ++x)
+                {
+                    for (int y = 0; y < 8; ++y)
+                    {
+                        float edgeDistance = offset + (x - 3.5f) / 8.0f * nx + (y - 3.5f) / 8.0f * ny;
+                        if (edgeDistance <= 0.0f)
+                        {
+                            int bitIndex = 8 * x + y;
+                            block |= 1ul << bitIndex;
+                        }
+                    }
+                }
+
+                table[lookup] |= transposeMask(block);
+            }
+
+            // For each slope, the first block should be all ones, the last all zeroes
+            Debug.Assert(table[slopeLookup] == 0xffff_ffff_ffff_ffff);
+            Debug.Assert(table[slopeLookup + OFFSET_QUANTIZATION_FACTOR - 1] == 0);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -137,16 +255,16 @@ public sealed unsafe class RasterizationTable : SafeHandle
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<int> quantizeSlopeLookup(Vector128<float> nx, Vector128<float> ny)
+    private static int quantizeSlopeLookup(float nx, float ny)
     {
-        Vector128<int> yNeg = Sse.CompareLessThan(ny, Vector128<float>.Zero).AsInt32();
+        int yNeg = ny < 0 ? unchecked((int)0xFFFFFFFF) : 0;
 
         // Remap [-1, 1] to [0, SLOPE_QUANTIZATION / 2]
         const float mul = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f;
         const float add = mul + 0.5f;
 
-        Vector128<int> quantizedSlope = Sse2.ConvertToVector128Int32WithTruncation(Fma.MultiplyAdd(nx, Vector128.Create(mul), Vector128.Create(add)));
-        return Sse2.ShiftLeftLogical(Sse2.Subtract(Sse2.ShiftLeftLogical(quantizedSlope, 1), yNeg), OFFSET_QUANTIZATION_BITS);
+        int quantizedSlope = (int)(nx * mul + add);
+        return ((quantizedSlope << 1) - yNeg) << OFFSET_QUANTIZATION_BITS;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
