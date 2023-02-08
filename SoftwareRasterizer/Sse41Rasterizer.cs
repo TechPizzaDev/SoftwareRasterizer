@@ -486,7 +486,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
         const float mul = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f / ((OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
         const float add = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f + 0.5f;
 
-        Vector128<int> quantizedSlope = Sse2.ConvertToVector128Int32WithTruncation(MultiplyAdd(nx, Vector128.Create(mul), Vector128.Create(add)));
+        Vector128<int> quantizedSlope = Sse2.ConvertToVector128Int32WithTruncation(Fma.MultiplyAdd(nx, Vector128.Create(mul), Vector128.Create(add)));
         return Sse2.ShiftLeftLogical(Sse2.Subtract(Sse2.ShiftLeftLogical(quantizedSlope, 1), yNeg), OFFSET_QUANTIZATION_BITS);
     }
 
@@ -495,7 +495,6 @@ public unsafe class Sse41Rasterizer : Rasterizer
     {
         Vector128<int> x1 = Sse2.ShiftRightArithmetic(depthA.AsInt32(), 12);
         Vector128<int> x2 = Sse2.ShiftRightArithmetic(depthB.AsInt32(), 12);
-
         return Sse41.PackUnsignedSaturate(x1, x2);
     }
 

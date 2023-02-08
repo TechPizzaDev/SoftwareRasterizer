@@ -547,8 +547,8 @@ public unsafe class Avx2Rasterizer : Rasterizer
             Vector128<float> Wa = Avx.Permute(mat3, 0b11_11_11_11);
             Vector128<float> Wb = Sse41.DotProduct(mat3, Vector128.Create((float)(1 << 21), 1 << 10, 1, 1), 0xFF);
 
-            Sse.StoreScalar(&c0, Sse.Divide(Sse.Subtract(Za, Zb), Sse.Subtract(Wa, Wb)));
-            Sse.StoreScalar(&c1, Fma.MultiplyAddNegated(Sse.Divide(Sse.Subtract(Za, Zb), Sse.Subtract(Wa, Wb)), Wa, Za));
+            c0 = Sse.Divide(Sse.Subtract(Za, Zb), Sse.Subtract(Wa, Wb)).ToScalar();
+            c1 = Fma.MultiplyAddNegated(Sse.Divide(Sse.Subtract(Za, Zb), Sse.Subtract(Wa, Wb)), Wa, Za).ToScalar();
         }
 
         const int alignment = 256 / 8;
@@ -1144,10 +1144,10 @@ public unsafe class Avx2Rasterizer : Rasterizer
                         Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
 
                         // Generate block mask
-                        ulong A = pTable[(uint)Sse2.ConvertToInt32(lookup)];
-                        ulong B = pTable[(uint)Sse41.Extract(lookup, 1)];
-                        ulong C = pTable[(uint)Sse41.Extract(lookup, 2)];
-                        ulong D = pTable[(uint)Sse41.Extract(lookup, 3)];
+                        ulong A = pTable[(uint)lookup.GetElement(0)];
+                        ulong B = pTable[(uint)lookup.GetElement(1)];
+                        ulong C = pTable[(uint)lookup.GetElement(2)];
+                        ulong D = pTable[(uint)lookup.GetElement(3)];
 
                         blockMask = A & B & C & D;
 
@@ -1159,10 +1159,10 @@ public unsafe class Avx2Rasterizer : Rasterizer
                         Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
 
                         // Generate block mask
-                        ulong A = pTable[(uint)Sse2.ConvertToInt32(lookup)];
-                        ulong B = pTable[(uint)Sse41.Extract(lookup, 1)];
-                        ulong C = pTable[(uint)Sse41.Extract(lookup, 2)];
-                        ulong D = pTable[(uint)Sse41.Extract(lookup, 3)];
+                        ulong A = pTable[(uint)lookup.GetElement(0)];
+                        ulong B = pTable[(uint)lookup.GetElement(1)];
+                        ulong C = pTable[(uint)lookup.GetElement(2)];
+                        ulong D = pTable[(uint)lookup.GetElement(3)];
 
                         // Switch over primitive mode. MSVC compiles this as a "sub eax, 1; jz label;" ladder, so the mode enum is ordered by descending frequency of occurence
                         // to optimize branch efficiency. By ensuring we have a default case that falls through to the last possible value (ConcaveLeft if not near clipped,
