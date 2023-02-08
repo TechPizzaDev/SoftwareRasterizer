@@ -7,6 +7,7 @@ using System.Runtime.Intrinsics.X86;
 namespace SoftwareRasterizer;
 
 using static VectorMath;
+using Fma = SoftFma;
 
 public unsafe class Sse41Rasterizer : Rasterizer
 {
@@ -144,9 +145,9 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
         // Transform first corner
         corners0 =
-          MultiplyAdd(col0, BroadcastScalarToVector128(boundsMin),
-            MultiplyAdd(col1, Permute(boundsMin, 0b01_01_01_01),
-              MultiplyAdd(col2, Permute(boundsMin, 0b10_10_10_10),
+          Fma.MultiplyAdd(col0, BroadcastScalarToVector128(boundsMin),
+            Fma.MultiplyAdd(col1, Permute(boundsMin, 0b01_01_01_01),
+              Fma.MultiplyAdd(col2, Permute(boundsMin, 0b10_10_10_10),
                 col3)));
 
         // Transform remaining corners by adding edge vectors
@@ -524,9 +525,9 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
         // Bake integer => bounding box transform into matrix
         mat3 =
-          MultiplyAdd(mat0, BroadcastScalarToVector128(boundsMin),
-            MultiplyAdd(mat1, Permute(boundsMin, 0b01_01_01_01),
-              MultiplyAdd(mat2, Permute(boundsMin, 0b10_10_10_10),
+          Fma.MultiplyAdd(mat0, BroadcastScalarToVector128(boundsMin),
+            Fma.MultiplyAdd(mat1, Permute(boundsMin, 0b01_01_01_01),
+              Fma.MultiplyAdd(mat2, Permute(boundsMin, 0b10_10_10_10),
                 mat3)));
 
         mat0 = Sse.Multiply(mat0, Sse.Multiply(BroadcastScalarToVector128(boundsExtents), Vector128.Create(1.0f / (2047ul << 21))));
@@ -534,7 +535,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
         mat2 = Sse.Multiply(mat2, Sse.Multiply(Permute(boundsExtents, 0b10_10_10_10), Vector128.Create(1.0f / 1023)));
 
         // Bias X coordinate back into positive range
-        mat3 = MultiplyAdd(mat0, Vector128.Create((float)(1024ul << 21)), mat3);
+        mat3 = Fma.MultiplyAdd(mat0, Vector128.Create((float)(1024ul << 21)), mat3);
 
         // Skew projection to correct bleeding of Y and Z into X due to lack of masking
         mat1 = Sse.Subtract(mat1, mat0);
@@ -552,7 +553,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
             Vector128<float> Wb = Sse41.DotProduct(mat3, Vector128.Create((float)(1 << 21), 1 << 10, 1, 1), 0xFF);
 
             c0 = Sse.Divide(Sse.Subtract(Za, Zb), Sse.Subtract(Wa, Wb)).ToScalar();
-            c1 = MultiplyAddNegated(Sse.Divide(Sse.Subtract(Za, Zb), Sse.Subtract(Wa, Wb)), Wa, Za).ToScalar();
+            c1 = Fma.MultiplyAddNegated(Sse.Divide(Sse.Subtract(Za, Zb), Sse.Subtract(Wa, Wb)), Wa, Za).ToScalar();
         }
 
         const int alignment = 256 / 8;
@@ -633,30 +634,30 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 Vector128<float> mat02 = Vector128.Create(mat0.GetElement(2));
                 Vector128<float> mat03 = Vector128.Create(mat0.GetElement(3));
 
-                Vector128<float> X0 = MultiplyAdd(Xf0, mat00, MultiplyAdd(Yf0, mat01, MultiplyAdd(Zf0, mat02, mat03)));
-                Vector128<float> X1 = MultiplyAdd(Xf1, mat00, MultiplyAdd(Yf1, mat01, MultiplyAdd(Zf1, mat02, mat03)));
-                Vector128<float> X2 = MultiplyAdd(Xf2, mat00, MultiplyAdd(Yf2, mat01, MultiplyAdd(Zf2, mat02, mat03)));
-                Vector128<float> X3 = MultiplyAdd(Xf3, mat00, MultiplyAdd(Yf3, mat01, MultiplyAdd(Zf3, mat02, mat03)));
+                Vector128<float> X0 = Fma.MultiplyAdd(Xf0, mat00, Fma.MultiplyAdd(Yf0, mat01, Fma.MultiplyAdd(Zf0, mat02, mat03)));
+                Vector128<float> X1 = Fma.MultiplyAdd(Xf1, mat00, Fma.MultiplyAdd(Yf1, mat01, Fma.MultiplyAdd(Zf1, mat02, mat03)));
+                Vector128<float> X2 = Fma.MultiplyAdd(Xf2, mat00, Fma.MultiplyAdd(Yf2, mat01, Fma.MultiplyAdd(Zf2, mat02, mat03)));
+                Vector128<float> X3 = Fma.MultiplyAdd(Xf3, mat00, Fma.MultiplyAdd(Yf3, mat01, Fma.MultiplyAdd(Zf3, mat02, mat03)));
 
                 Vector128<float> mat10 = Vector128.Create(mat1.GetElement(0));
                 Vector128<float> mat11 = Vector128.Create(mat1.GetElement(1));
                 Vector128<float> mat12 = Vector128.Create(mat1.GetElement(2));
                 Vector128<float> mat13 = Vector128.Create(mat1.GetElement(3));
 
-                Vector128<float> Y0 = MultiplyAdd(Xf0, mat10, MultiplyAdd(Yf0, mat11, MultiplyAdd(Zf0, mat12, mat13)));
-                Vector128<float> Y1 = MultiplyAdd(Xf1, mat10, MultiplyAdd(Yf1, mat11, MultiplyAdd(Zf1, mat12, mat13)));
-                Vector128<float> Y2 = MultiplyAdd(Xf2, mat10, MultiplyAdd(Yf2, mat11, MultiplyAdd(Zf2, mat12, mat13)));
-                Vector128<float> Y3 = MultiplyAdd(Xf3, mat10, MultiplyAdd(Yf3, mat11, MultiplyAdd(Zf3, mat12, mat13)));
+                Vector128<float> Y0 = Fma.MultiplyAdd(Xf0, mat10, Fma.MultiplyAdd(Yf0, mat11, Fma.MultiplyAdd(Zf0, mat12, mat13)));
+                Vector128<float> Y1 = Fma.MultiplyAdd(Xf1, mat10, Fma.MultiplyAdd(Yf1, mat11, Fma.MultiplyAdd(Zf1, mat12, mat13)));
+                Vector128<float> Y2 = Fma.MultiplyAdd(Xf2, mat10, Fma.MultiplyAdd(Yf2, mat11, Fma.MultiplyAdd(Zf2, mat12, mat13)));
+                Vector128<float> Y3 = Fma.MultiplyAdd(Xf3, mat10, Fma.MultiplyAdd(Yf3, mat11, Fma.MultiplyAdd(Zf3, mat12, mat13)));
 
                 Vector128<float> mat30 = Vector128.Create(mat3.GetElement(0));
                 Vector128<float> mat31 = Vector128.Create(mat3.GetElement(1));
                 Vector128<float> mat32 = Vector128.Create(mat3.GetElement(2));
                 Vector128<float> mat33 = Vector128.Create(mat3.GetElement(3));
 
-                Vector128<float> W0 = MultiplyAdd(Xf0, mat30, MultiplyAdd(Yf0, mat31, MultiplyAdd(Zf0, mat32, mat33)));
-                Vector128<float> W1 = MultiplyAdd(Xf1, mat30, MultiplyAdd(Yf1, mat31, MultiplyAdd(Zf1, mat32, mat33)));
-                Vector128<float> W2 = MultiplyAdd(Xf2, mat30, MultiplyAdd(Yf2, mat31, MultiplyAdd(Zf2, mat32, mat33)));
-                Vector128<float> W3 = MultiplyAdd(Xf3, mat30, MultiplyAdd(Yf3, mat31, MultiplyAdd(Zf3, mat32, mat33)));
+                Vector128<float> W0 = Fma.MultiplyAdd(Xf0, mat30, Fma.MultiplyAdd(Yf0, mat31, Fma.MultiplyAdd(Zf0, mat32, mat33)));
+                Vector128<float> W1 = Fma.MultiplyAdd(Xf1, mat30, Fma.MultiplyAdd(Yf1, mat31, Fma.MultiplyAdd(Zf1, mat32, mat33)));
+                Vector128<float> W2 = Fma.MultiplyAdd(Xf2, mat30, Fma.MultiplyAdd(Yf2, mat31, Fma.MultiplyAdd(Zf2, mat32, mat33)));
+                Vector128<float> W3 = Fma.MultiplyAdd(Xf3, mat30, Fma.MultiplyAdd(Yf3, mat31, Fma.MultiplyAdd(Zf3, mat32, mat33)));
 
                 Vector128<float> invW0, invW1, invW2, invW3;
                 // Clamp W and invert
@@ -700,9 +701,9 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 Vector128<float> edgeNormalsY2 = Sse.Subtract(x2, x3);
                 Vector128<float> edgeNormalsY3 = Sse.Subtract(x3, x0);
 
-                Vector128<float> area0 = MultiplySubtract(edgeNormalsX0, edgeNormalsY1, Sse.Multiply(edgeNormalsX1, edgeNormalsY0));
-                Vector128<float> area1 = MultiplySubtract(edgeNormalsX1, edgeNormalsY2, Sse.Multiply(edgeNormalsX2, edgeNormalsY1));
-                Vector128<float> area2 = MultiplySubtract(edgeNormalsX2, edgeNormalsY3, Sse.Multiply(edgeNormalsX3, edgeNormalsY2));
+                Vector128<float> area0 = Fma.MultiplySubtract(edgeNormalsX0, edgeNormalsY1, Sse.Multiply(edgeNormalsX1, edgeNormalsY0));
+                Vector128<float> area1 = Fma.MultiplySubtract(edgeNormalsX1, edgeNormalsY2, Sse.Multiply(edgeNormalsX2, edgeNormalsY1));
+                Vector128<float> area2 = Fma.MultiplySubtract(edgeNormalsX2, edgeNormalsY3, Sse.Multiply(edgeNormalsX3, edgeNormalsY2));
                 Vector128<float> area3 = Sse.Subtract(Sse.Add(area0, area2), area1);
 
                 Vector128<float> minusZero128 = Vector128.Create(-0.0f);
@@ -902,10 +903,10 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 Vector128<float> C0 = Vector128.Create(c0);
                 Vector128<float> C1 = Vector128.Create(c1);
                 Vector128<float> z0, z1, z2, z3;
-                z0 = MultiplyAdd(invW0, C1, C0);
-                z1 = MultiplyAdd(invW1, C1, C0);
-                z2 = MultiplyAdd(invW2, C1, C0);
-                z3 = MultiplyAdd(invW3, C1, C0);
+                z0 = Fma.MultiplyAdd(invW0, C1, C0);
+                z1 = Fma.MultiplyAdd(invW1, C1, C0);
+                z2 = Fma.MultiplyAdd(invW2, C1, C0);
+                z3 = Fma.MultiplyAdd(invW3, C1, C0);
 
                 Vector128<float> maxZ = Sse.Max(Sse.Max(z0, z1), Sse.Max(z2, z3));
 
@@ -947,13 +948,13 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 Vector128<float> edgeNormalsY4 = Sse.Subtract(x2, x0);
 
                 Vector128<float> depthPlane0, depthPlane1, depthPlane2;
-                depthPlane1 = Sse.Multiply(invArea, Sse41.BlendVariable(MultiplySubtract(z20, edgeNormalsX1, Sse.Multiply(z12, edgeNormalsX4)), MultiplyAddNegated(z20, edgeNormalsX3, Sse.Multiply(z30, edgeNormalsX4)), greaterArea));
-                depthPlane2 = Sse.Multiply(invArea, Sse41.BlendVariable(MultiplySubtract(z20, edgeNormalsY1, Sse.Multiply(z12, edgeNormalsY4)), MultiplyAddNegated(z20, edgeNormalsY3, Sse.Multiply(z30, edgeNormalsY4)), greaterArea));
+                depthPlane1 = Sse.Multiply(invArea, Sse41.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, Sse.Multiply(z12, edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, Sse.Multiply(z30, edgeNormalsX4)), greaterArea));
+                depthPlane2 = Sse.Multiply(invArea, Sse41.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, Sse.Multiply(z12, edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, Sse.Multiply(z30, edgeNormalsY4)), greaterArea));
 
                 x0 = Sse.Subtract(x0, Sse2.ConvertToVector128Single(minX));
                 y0 = Sse.Subtract(y0, Sse2.ConvertToVector128Single(minY));
 
-                depthPlane0 = MultiplyAddNegated(x0, depthPlane1, MultiplyAddNegated(y0, depthPlane2, z0));
+                depthPlane0 = Fma.MultiplyAddNegated(x0, depthPlane1, Fma.MultiplyAddNegated(y0, depthPlane2, z0));
 
                 // If mode == Triangle0, replace edge 2 with edge 4; if mode == Triangle1, replace edge 0 with edge 4
                 edgeNormalsX2 = Sse41.BlendVariable(edgeNormalsX2, edgeNormalsX4, modeTriangle0);
@@ -988,18 +989,18 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 Vector128<float> add128 = Vector128.Create(0.5f - minEdgeOffset * (OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
                 Vector128<float> edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3;
 
-                edgeOffsets0 = MultiplyAddNegated(x0, edgeNormalsX0, MultiplyAddNegated(y0, edgeNormalsY0, add128));
-                edgeOffsets1 = MultiplyAddNegated(x1, edgeNormalsX1, MultiplyAddNegated(y1, edgeNormalsY1, add128));
-                edgeOffsets2 = MultiplyAddNegated(x2, edgeNormalsX2, MultiplyAddNegated(y2, edgeNormalsY2, add128));
-                edgeOffsets3 = MultiplyAddNegated(x3, edgeNormalsX3, MultiplyAddNegated(y3, edgeNormalsY3, add128));
+                edgeOffsets0 = Fma.MultiplyAddNegated(x0, edgeNormalsX0, Fma.MultiplyAddNegated(y0, edgeNormalsY0, add128));
+                edgeOffsets1 = Fma.MultiplyAddNegated(x1, edgeNormalsX1, Fma.MultiplyAddNegated(y1, edgeNormalsY1, add128));
+                edgeOffsets2 = Fma.MultiplyAddNegated(x2, edgeNormalsX2, Fma.MultiplyAddNegated(y2, edgeNormalsY2, add128));
+                edgeOffsets3 = Fma.MultiplyAddNegated(x3, edgeNormalsX3, Fma.MultiplyAddNegated(y3, edgeNormalsY3, add128));
 
-                edgeOffsets1 = MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX1, edgeOffsets1);
-                edgeOffsets2 = MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX2, edgeOffsets2);
-                edgeOffsets3 = MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX3, edgeOffsets3);
+                edgeOffsets1 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX1, edgeOffsets1);
+                edgeOffsets2 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX2, edgeOffsets2);
+                edgeOffsets3 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX3, edgeOffsets3);
 
-                edgeOffsets1 = MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY1, edgeOffsets1);
-                edgeOffsets2 = MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY2, edgeOffsets2);
-                edgeOffsets3 = MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY3, edgeOffsets3);
+                edgeOffsets1 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY1, edgeOffsets1);
+                edgeOffsets2 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY2, edgeOffsets2);
+                edgeOffsets3 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY3, edgeOffsets3);
 
                 // Quantize slopes
                 Vector128<int> slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);
@@ -1097,13 +1098,13 @@ public unsafe class Sse41Rasterizer : Rasterizer
             Vector128<float> lineDepthTerm = Vector128.Create(*(float*)(depthPlane + primitiveIdxTransposed));
 
             Vector128<float> lineDepthA =
-              MultiplyAdd(depthDx, depthSamplePosFactor1,
-                MultiplyAdd(depthDy, depthSamplePosFactor2A,
+              Fma.MultiplyAdd(depthDx, depthSamplePosFactor1,
+                Fma.MultiplyAdd(depthDy, depthSamplePosFactor2A,
                   lineDepthTerm));
 
             Vector128<float> lineDepthB =
-              MultiplyAdd(depthDx, depthSamplePosFactor1,
-                MultiplyAdd(depthDy, depthSamplePosFactor2B,
+              Fma.MultiplyAdd(depthDx, depthSamplePosFactor1,
+                Fma.MultiplyAdd(depthDy, depthSamplePosFactor2B,
                   lineDepthTerm));
 
             Vector128<int> slopeLookup = Sse2.LoadAlignedVector128((int*)(slopeLookups + primitiveIdxTransposed));
@@ -1238,12 +1239,12 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
                     // Generate depth values around block
                     Vector128<float> depth0_A = depthA;
-                    Vector128<float> depth1_A = MultiplyAdd(depthDx, Vector128.Create(0.5f), depth0_A);
+                    Vector128<float> depth1_A = Fma.MultiplyAdd(depthDx, Vector128.Create(0.5f), depth0_A);
                     Vector128<float> depth8_A = Sse.Add(depthDy, depth0_A);
                     Vector128<float> depth9_A = Sse.Add(depthDy, depth1_A);
 
                     Vector128<float> depth0_B = depthB;
-                    Vector128<float> depth1_B = MultiplyAdd(depthDx, Vector128.Create(0.5f), depth0_B);
+                    Vector128<float> depth1_B = Fma.MultiplyAdd(depthDx, Vector128.Create(0.5f), depth0_B);
                     Vector128<float> depth8_B = Sse.Add(depthDy, depth0_B);
                     Vector128<float> depth9_B = Sse.Add(depthDy, depth1_B);
 
@@ -1321,24 +1322,6 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 }
             }
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<float> MultiplyAdd(Vector128<float> a, Vector128<float> b, Vector128<float> c)
-    {
-        return Sse.Add(Sse.Multiply(a, b), c);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<float> MultiplySubtract(Vector128<float> a, Vector128<float> b, Vector128<float> c)
-    {
-        return Sse.Subtract(Sse.Multiply(a, b), c);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<float> MultiplyAddNegated(Vector128<float> a, Vector128<float> b, Vector128<float> c)
-    {
-        return Sse.Subtract(c, Sse.Multiply(a, b));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

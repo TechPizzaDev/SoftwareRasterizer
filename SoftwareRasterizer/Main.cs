@@ -82,7 +82,7 @@ public static unsafe class Main
             new ReadOnlySpan<Vector128<float>>(vertices, (int)vertexCount));
 
         g_rasterizationTable = new RasterizationTable();
-        g_rasterizer = Avx2Rasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+        g_rasterizer = Avx2Rasterizer<SoftFma>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // Pad to a multiple of 8 quads
         while (indexList.Count % 32 != 0)

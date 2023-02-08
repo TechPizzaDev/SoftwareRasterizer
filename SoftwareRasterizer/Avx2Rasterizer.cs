@@ -8,7 +8,8 @@ namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe class Avx2Rasterizer : Rasterizer
+public unsafe class Avx2Rasterizer<Fma> : Rasterizer
+    where Fma : IFusedMultiplyAdd
 {
     private const FloatComparisonMode _CMP_LT_OQ = FloatComparisonMode.OrderedLessThanNonSignaling;
     private const FloatComparisonMode _CMP_LE_OQ = FloatComparisonMode.OrderedLessThanOrEqualNonSignaling;
@@ -21,13 +22,13 @@ public unsafe class Avx2Rasterizer : Rasterizer
     {
     }
 
-    public static Avx2Rasterizer Create(RasterizationTable rasterizationTable, uint width, uint height)
+    public static Avx2Rasterizer<Fma> Create(RasterizationTable rasterizationTable, uint width, uint height)
     {
         bool success = false;
         rasterizationTable.DangerousAddRef(ref success);
         if (success)
         {
-            return new Avx2Rasterizer(rasterizationTable, width, height);
+            return new Avx2Rasterizer<Fma>(rasterizationTable, width, height);
         }
         throw new ObjectDisposedException(rasterizationTable.GetType().Name);
     }
@@ -481,7 +482,6 @@ public unsafe class Avx2Rasterizer : Rasterizer
     {
         Vector128<int> x1 = Sse2.ShiftRightArithmetic(depthA.AsInt32(), 12);
         Vector128<int> x2 = Sse2.ShiftRightArithmetic(depthB.AsInt32(), 12);
-
         return Sse41.PackUnsignedSaturate(x1, x2);
     }
 
@@ -497,7 +497,6 @@ public unsafe class Avx2Rasterizer : Rasterizer
     {
         Vector256<int> x1 = Avx2.ShiftRightArithmetic(depthA.AsInt32(), 12);
         Vector256<int> x2 = Avx2.ShiftRightArithmetic(depthB.AsInt32(), 12);
-
         return Avx2.PackUnsignedSaturate(x1, x2);
     }
 
