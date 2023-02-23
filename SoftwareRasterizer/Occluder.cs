@@ -12,7 +12,7 @@ using static VectorMath;
 
 public unsafe struct Occluder : IDisposable
 {
-    private nint _vertexData;
+    private IntPtr _vertexData;
 
     public Vector128<float> m_center;
 
@@ -25,7 +25,8 @@ public unsafe struct Occluder : IDisposable
     public Vector256<int>* m_vertexData => (Vector256<int>*)_vertexData;
     public uint m_packetCount;
 
-    public static Occluder bake(ReadOnlySpan<Vector128<float>> vertices, Vector128<float> refMin, Vector128<float> refMax)
+    public static Occluder Bake<Fma>(ReadOnlySpan<Vector128<float>> vertices, Vector128<float> refMin, Vector128<float> refMax)
+        where Fma : IFusedMultiplyAdd
     {
         Debug.Assert(vertices.Length % 16 == 0);
 
@@ -131,8 +132,6 @@ public unsafe struct Occluder : IDisposable
         uint packetCount = 0;
         Vector256<int>* vertexData = (Vector256<int>*)NativeMemory.AlignedAlloc((uint)orderedVertices.Length * 4, 32);
 
-        Vector128<int>* v = stackalloc Vector128<int>[8];
-
         for (int i = 0; i < orderedVertices.Length; i += 32)
         {
             for (int j = 0; j < 4; ++j)
@@ -172,14 +171,10 @@ public unsafe struct Occluder : IDisposable
                 Vector128<int> XYZ0 = Sse2.Or(Sse2.ShiftLeftLogical(X0, 21), Sse2.Or(Sse2.ShiftLeftLogical(Y0, 10), Z0));
                 Vector128<int> XYZ1 = Sse2.Or(Sse2.ShiftLeftLogical(X1, 21), Sse2.Or(Sse2.ShiftLeftLogical(Y1, 10), Z1));
 
-                v[2 * j + 0] = XYZ0;
-                v[2 * j + 1] = XYZ1;
+                Sse2.StoreAligned((int*)(vertexData + packetCount) + 0, XYZ0);
+                Sse2.StoreAligned((int*)(vertexData + packetCount) + 4, XYZ1);
+                packetCount++;
             }
-
-            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 0));
-            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 2));
-            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 4));
-            vertexData[packetCount++] = Avx.LoadVector256((int*)(v + 6));
         }
 
         Vector128<float> min = Vector128.Create(float.PositiveInfinity);
@@ -198,7 +193,7 @@ public unsafe struct Occluder : IDisposable
         Occluder occluder = new()
         {
             m_packetCount = packetCount,
-            _vertexData = (nint)vertexData,
+            _vertexData = (IntPtr)vertexData,
 
             m_refMin = refMin,
             m_refMax = refMax,
@@ -214,7 +209,7 @@ public unsafe struct Occluder : IDisposable
 
     public void Dispose()
     {
-        nint vertexData = Interlocked.Exchange(ref _vertexData, 0);
+        IntPtr vertexData = Interlocked.Exchange(ref _vertexData, 0);
         if (vertexData != 0)
         {
             NativeMemory.AlignedFree((void*)vertexData);
