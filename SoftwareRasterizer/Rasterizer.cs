@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -72,7 +73,7 @@ public abstract unsafe partial class Rasterizer : IRasterizer
 
     public abstract void rasterize<T>(in Occluder occluder) where T : IPossiblyNearClipped;
 
-    public abstract bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping);
+    public abstract bool queryVisibility(Vector4 boundsMin, Vector4 boundsMax, out bool needsClipping);
 
     public abstract bool query2D(uint minX, uint maxX, uint minY, uint maxY, uint maxZ);
 

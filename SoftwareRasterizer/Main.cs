@@ -61,17 +61,17 @@ public static unsafe class Main
             inFile.ReadAtLeast(dst, dst.Length);
         }
 
-        Vector128<float>* vertices;
+        Vector4* vertices;
         uint vertexCount;
         {
             string fileName = Path.Combine(SCENE, "VertexBuffer.bin");
             using FileStream inFile = File.OpenRead(fileName);
 
             long size = inFile.Length;
-            vertexCount = (uint)(size / sizeof(Vector128<float>));
+            vertexCount = (uint)(size / sizeof(Vector4));
 
-            uint vertexByteCount = vertexCount * (uint)sizeof(Vector128<float>);
-            vertices = (Vector128<float>*)NativeMemory.Alloc(vertexByteCount);
+            uint vertexByteCount = vertexCount * (uint)sizeof(Vector4);
+            vertices = (Vector4*)NativeMemory.Alloc(vertexByteCount);
 
             Span<byte> dst = new(vertices, (int)vertexByteCount);
             inFile.ReadAtLeast(dst, dst.Length);
@@ -79,7 +79,7 @@ public static unsafe class Main
 
         List<uint> indexList = QuadDecomposition.decompose(
             inputIndices,
-            new ReadOnlySpan<Vector128<float>>(vertices, (int)vertexCount));
+            new ReadOnlySpan<Vector4>(vertices, (int)vertexCount));
 
         g_rasterizationTable = new RasterizationTable();
         g_rasterizer = Avx2Rasterizer<HardFma>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
@@ -94,7 +94,7 @@ public static unsafe class Main
 
         int quadAabbCount = indices.Length / 4;
         nuint quadAabbByteCount = (nuint)quadAabbCount * (uint)sizeof(Aabb);
-        Aabb* quadAabbs = (Aabb*)NativeMemory.AlignedAlloc(quadAabbByteCount, (uint)sizeof(Vector128<float>));
+        Aabb* quadAabbs = (Aabb*)NativeMemory.AlignedAlloc(quadAabbByteCount, (uint)sizeof(Vector4));
         for (int quadIndex = 0; quadIndex < quadAabbCount; ++quadIndex)
         {
             Aabb aabb = new();
@@ -117,7 +117,7 @@ public static unsafe class Main
         // Bake occluders
         foreach (SurfaceAreaHeuristic.Vector batch in batchAssignment)
         {
-            Vector128<float>[] batchVertices = new Vector128<float>[batch.Length * 4];
+            Vector4[] batchVertices = new Vector4[batch.Length * 4];
             for (int i = 0; i < batch.Length; i++)
             {
                 uint quadIndex = batch.Start[i];
@@ -127,7 +127,7 @@ public static unsafe class Main
                 batchVertices[i * 4 + 3] = vertices[(int)indices[(int)(quadIndex * 4 + 3)]];
             }
 
-            g_occluders.Add(Occluder.Bake<HardFma>(batchVertices, refAabb.m_min, refAabb.m_max));
+            g_occluders.Add(Occluder.Bake(batchVertices, refAabb.m_min, refAabb.m_max));
         }
         SurfaceAreaHeuristic.freeBatches(batchAssignmentPtr);
 
@@ -197,7 +197,7 @@ public static unsafe class Main
                 g_rasterizer.setModelViewProjection(mvp);
 
                 // Sort front to back
-                Algo.sort(CollectionsMarshal.AsSpan(g_occluders), new OccluderComparer(g_cameraPosition.AsVector128()));
+                Algo.sort(CollectionsMarshal.AsSpan(g_occluders), new Sse41OccluderComparer(new Vector4(g_cameraPosition, 0)));
 
                 foreach (ref readonly Occluder occluder in CollectionsMarshal.AsSpan(g_occluders))
                 {
@@ -305,6 +305,26 @@ public static unsafe class Main
                 if (GetAsyncKeyState(VK_RIGHT) != 0)
                     g_cameraDirection = Vector3.Transform(g_cameraDirection, Quaternion.CreateFromAxisAngle(g_upVector, rotateSpeed));
 
+                if ((GetAsyncKeyState('R') & 1) != 0)
+                {
+                    var previousRasterizer = g_rasterizer;
+                    if (previousRasterizer is Avx2Rasterizer<SoftFma> or Avx2Rasterizer<HardFma>)
+                    {
+                        g_rasterizer = Sse41Rasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+                    }
+                    else if (previousRasterizer is Sse41Rasterizer)
+                    {
+                        g_rasterizer = ScalarRasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+                    }
+                    else
+                    {
+                        g_rasterizer = Avx2Rasterizer<HardFma>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+                    }
+
+                    previousRasterizer.Dispose();
+                    Console.WriteLine($"Changed to {g_rasterizer}  (from {previousRasterizer})");
+                }
+
                 InvalidateRect(hWnd, default, FALSE);
             }
             break;
@@ -319,24 +339,45 @@ public static unsafe class Main
         return 0;
     }
 
-    readonly struct OccluderComparer : Algo.IComparer<Occluder>
+    readonly struct Sse41OccluderComparer : Algo.IComparer<Occluder>
     {
-        public readonly Vector128<float> CameraPosition;
+        public readonly Vector4 CameraPosition;
 
-        public OccluderComparer(Vector128<float> cameraPosition)
+        public Sse41OccluderComparer(Vector4 cameraPosition)
         {
             CameraPosition = cameraPosition;
         }
 
         public bool Compare(in Occluder x, in Occluder y)
         {
-            Vector128<float> dist1 = Sse.Subtract(x.m_center, CameraPosition);
-            Vector128<float> dist2 = Sse.Subtract(y.m_center, CameraPosition);
+            Vector128<float> dist1 = (x.m_center - CameraPosition).AsVector128();
+            Vector128<float> dist2 = (y.m_center - CameraPosition).AsVector128();
 
             Vector128<float> a = Sse41.DotProduct(dist1, dist1, 0x7f);
             Vector128<float> b = Sse41.DotProduct(dist2, dist2, 0x7f);
 
             return Sse.CompareScalarOrderedLessThan(a, b);
+        }
+    }
+
+    readonly struct ScalarOccluderComparer : Algo.IComparer<Occluder>
+    {
+        public readonly Vector4 CameraPosition;
+
+        public ScalarOccluderComparer(Vector4 cameraPosition)
+        {
+            CameraPosition = cameraPosition;
+        }
+
+        public bool Compare(in Occluder x, in Occluder y)
+        {
+            Vector4 dist1 = (x.m_center - CameraPosition);
+            Vector4 dist2 = (y.m_center - CameraPosition);
+
+            float a = ScalarMath.DotProduct_x7F(dist1);
+            float b = ScalarMath.DotProduct_x7F(dist2);
+
+            return a < b;
         }
     }
 }

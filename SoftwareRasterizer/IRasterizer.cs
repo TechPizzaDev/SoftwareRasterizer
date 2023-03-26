@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Runtime.Intrinsics;
+using System.Numerics;
 
 namespace SoftwareRasterizer;
 
@@ -12,7 +12,7 @@ public unsafe interface IRasterizer : IDisposable
     void rasterize<T>(in Occluder occluder)
         where T : IPossiblyNearClipped;
 
-	bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping);
+	bool queryVisibility(Vector4 boundsMin, Vector4 boundsMax, out bool needsClipping);
 
     bool query2D(uint minX, uint maxX, uint minY, uint maxY, uint maxZ);
 

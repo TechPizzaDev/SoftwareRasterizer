@@ -76,8 +76,11 @@ public unsafe class Sse41Rasterizer : Rasterizer
         }
     }
 
-    public override bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping)
+    public override bool queryVisibility(Vector4 vBoundsMin, Vector4 vBoundsMax, out bool needsClipping)
     {
+        Vector128<float> boundsMin = vBoundsMin.AsVector128();
+        Vector128<float> boundsMax = vBoundsMax.AsVector128();
+
         // Frustum cull
         Vector128<float> extents = Sse.Subtract(boundsMax, boundsMin);
         Vector128<float> center = Sse.Add(boundsMax, boundsMin); // Bounding box center times 2 - but since W = 2, the plane equations work out correctly
@@ -520,8 +523,8 @@ public unsafe class Sse41Rasterizer : Rasterizer
         Vector128<float> mat2 = Sse.LoadVector128(m_modelViewProjection + 8);
         Vector128<float> mat3 = Sse.LoadVector128(m_modelViewProjection + 12);
 
-        Vector128<float> boundsMin = occluder.m_refMin;
-        Vector128<float> boundsExtents = Sse.Subtract(occluder.m_refMax, boundsMin);
+        Vector128<float> boundsMin = occluder.m_refMin.AsVector128();
+        Vector128<float> boundsExtents = Sse.Subtract(occluder.m_refMax.AsVector128(), boundsMin);
 
         // Bake integer => bounding box transform into matrix
         mat3 =
