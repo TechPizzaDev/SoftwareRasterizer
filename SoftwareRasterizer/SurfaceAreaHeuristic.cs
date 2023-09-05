@@ -4,18 +4,17 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
 
 public static unsafe class SurfaceAreaHeuristic
 {
-    private readonly struct SseAabbComparer : Algo.IComparer<uint>
+    private readonly struct V128AabbComparer : Algo.IComparer<uint>
     {
         public readonly Aabb* aabbs;
         public readonly int mask;
 
-        public SseAabbComparer(Aabb* aabbs, int mask)
+        public V128AabbComparer(Aabb* aabbs, int mask)
         {
             this.aabbs = aabbs;
             this.mask = mask;
@@ -25,7 +24,7 @@ public static unsafe class SurfaceAreaHeuristic
         {
             Vector128<float> aabbX = aabbs[x].getCenter().AsVector128();
             Vector128<float> aabbY = aabbs[y].getCenter().AsVector128();
-            return (Sse.MoveMask(Sse.CompareLessThan(aabbX, aabbY)) & mask) != 0;
+            return (Vector128.ExtractMostSignificantBits(Vector128.LessThan(aabbX, aabbY)) & mask) != 0;
         }
     }
 
@@ -78,9 +77,9 @@ public static unsafe class SurfaceAreaHeuristic
         for (int splitAxis = 0; splitAxis < 3; ++splitAxis)
         {
             // Sort along center position
-            if (Sse.IsSupported)
+            if (Vector128.IsHardwareAccelerated)
             {
-                Algo.stable_sort(sortStart, sortEnd, new SseAabbComparer(aabbsIn, 1 << splitAxis));
+                Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1 << splitAxis));
             }
             else
             {
@@ -126,9 +125,9 @@ public static unsafe class SurfaceAreaHeuristic
         NativeMemory.AlignedFree(areasFromRight);
 
         // Sort again according to best axis
-        if (Sse.IsSupported)
+        if (Vector128.IsHardwareAccelerated)
         {
-            Algo.stable_sort(sortStart, sortEnd, new SseAabbComparer(aabbsIn, 1 << bestAxis));
+            Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1 << bestAxis));
         }
         else
         {

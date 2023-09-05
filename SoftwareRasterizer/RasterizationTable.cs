@@ -25,13 +25,13 @@ public sealed unsafe class RasterizationTable : SafeHandle
 
         Unsafe.InitBlockUnaligned(precomputedRasterTables, 0, precomputedRasterTablesByteCount);
 
-        if (Avx2.IsSupported)
+        if (Vector256.IsHardwareAccelerated)
         {
-            ComputeRasterizationTableAvx2(precomputedRasterTables);
+            ComputeRasterizationTableV256(precomputedRasterTables);
         }
-        else if (Sse.IsSupported)
+        else if (Vector128.IsHardwareAccelerated)
         {
-            ComputeRasterizationTableSse(precomputedRasterTables);
+            ComputeRasterizationTableV128(precomputedRasterTables);
         }
         else
         {
@@ -42,7 +42,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    private static void ComputeRasterizationTableAvx2(ulong* table)
+    private static void ComputeRasterizationTableV256(ulong* table)
     {
         for (uint i = 0; i < angularResolution; ++i)
         {
@@ -66,7 +66,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
                 (6 - 3.5f) / 8f,
                 (7 - 3.5f) / 8f);
 
-            Vector256<float> incX = Avx.Multiply(inc, Vector256.Create(nx));
+            Vector256<float> incX = (inc * Vector256.Create(nx));
 
             for (uint j = 0; j < offsetResolution; ++j)
             {
@@ -81,10 +81,10 @@ public sealed unsafe class RasterizationTable : SafeHandle
                 for (int y = 0; y < 8; ++y)
                 {
                     Vector256<float> o = Vector256.Create(offset + (y - 3.5f) / 8.0f * ny);
-                    Vector256<float> edgeDistance = Avx.Add(o, incX);
-                    Vector256<float> cmp = Avx.CompareLessThanOrEqual(edgeDistance, Vector256<float>.Zero);
+                    Vector256<float> edgeDistance = (o + incX);
+                    Vector256<float> cmp = Vector256.LessThanOrEqual(edgeDistance, Vector256<float>.Zero);
 
-                    uint mask = (uint)Avx.MoveMask(cmp);
+                    uint mask = Vector256.ExtractMostSignificantBits(cmp);
                     block |= expandMask(mask) << y;
                 }
 
@@ -98,7 +98,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    private static void ComputeRasterizationTableSse(ulong* table)
+    private static void ComputeRasterizationTableV128(ulong* table)
     {
         for (uint i = 0; i < angularResolution; ++i)
         {
@@ -124,8 +124,8 @@ public sealed unsafe class RasterizationTable : SafeHandle
                 (6 - 3.5f) / 8f,
                 (7 - 3.5f) / 8f);
 
-            Vector128<float> incX1 = Sse.Multiply(inc1, Vector128.Create(nx));
-            Vector128<float> incX2 = Sse.Multiply(inc2, Vector128.Create(nx));
+            Vector128<float> incX1 = (inc1 * Vector128.Create(nx));
+            Vector128<float> incX2 = (inc2 * Vector128.Create(nx));
 
             for (uint j = 0; j < offsetResolution; ++j)
             {
@@ -140,12 +140,12 @@ public sealed unsafe class RasterizationTable : SafeHandle
                 for (int y = 0; y < 8; ++y)
                 {
                     Vector128<float> o = Vector128.Create(offset + (y - 3.5f) / 8.0f * ny);
-                    Vector128<float> edgeDistance1 = Sse.Add(o, incX1);
-                    Vector128<float> edgeDistance2 = Sse.Add(o, incX2);
-                    Vector128<float> cmp1 = Sse.CompareLessThanOrEqual(edgeDistance1, Vector128<float>.Zero);
-                    Vector128<float> cmp2 = Sse.CompareLessThanOrEqual(edgeDistance2, Vector128<float>.Zero);
+                    Vector128<float> edgeDistance1 = (o + incX1);
+                    Vector128<float> edgeDistance2 = (o + incX2);
+                    Vector128<float> cmp1 = Vector128.LessThanOrEqual(edgeDistance1, Vector128<float>.Zero);
+                    Vector128<float> cmp2 = Vector128.LessThanOrEqual(edgeDistance2, Vector128<float>.Zero);
 
-                    uint mask = (uint)Sse.MoveMask(cmp1) | (uint)(Sse.MoveMask(cmp2) << 4);
+                    uint mask = Vector128.ExtractMostSignificantBits(cmp1) | (Vector128.ExtractMostSignificantBits(cmp2) << 4);
                     block |= expandMask(mask) << y;
                 }
 

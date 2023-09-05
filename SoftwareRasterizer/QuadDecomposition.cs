@@ -341,7 +341,7 @@ public static unsafe class QuadDecomposition
     // Maximum distance of vertices from original plane in world space units
     private const float MaximumDepthError = 0.5f;
 
-    private static bool canMergeTrianglesToQuad(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2, Vector128<float> v3)
+    private static bool CanMergeTrianglesToQuadSse41(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2, Vector128<float> v3)
     {
         Vector128<float> n0 = normalize(normal(v0, v1, v2));
         Vector128<float> n2 = normalize(normal(v2, v3, v0));
@@ -358,11 +358,11 @@ public static unsafe class QuadDecomposition
         return true;
     }
 
-    private static bool canMergeTrianglesToQuad(Vector4 v0, Vector4 v1, Vector4 v2, Vector4 v3)
+    private static bool CanMergeTrianglesToQuad(Vector4 v0, Vector4 v1, Vector4 v2, Vector4 v3)
     {
         if (Sse41.IsSupported)
         {
-            return canMergeTrianglesToQuad(v0.AsVector128(), v1.AsVector128(), v2.AsVector128(), v3.AsVector128());
+            return CanMergeTrianglesToQuadSse41(v0.AsVector128(), v1.AsVector128(), v2.AsVector128(), v3.AsVector128());
         }
 
         Vector4 n0 = normalize(normal(v0, v1, v2));
@@ -429,7 +429,7 @@ public static unsafe class QuadDecomposition
                     int quad2 = (int)i[(edgeIdx + 1) % 3];
                     int quad3 = (int)i[(edgeIdx + 2) % 3];
 
-                    if (canMergeTrianglesToQuad(vertices[quad0], vertices[quad1], vertices[quad2], vertices[quad3]))
+                    if (CanMergeTrianglesToQuad(vertices[quad0], vertices[quad1], vertices[quad2], vertices[quad3]))
                     {
                         neighborList.Add((int)neighborTriangle);
                         candidateGraph.m_adjacencyList[neighborTriangle].Add((int)triangleIdx);
