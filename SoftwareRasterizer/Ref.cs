@@ -1,12 +1,9 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
+using System.Runtime.CompilerServices;
 
 namespace SoftwareRasterizer;
 
-#pragma warning disable CS0660 // Type defines operator == or operator != but does not override Object.Equals(object o)
-#pragma warning disable CS0661 // Type defines operator == or operator != but does not override Object.GetHashCode()
 public readonly ref struct Ref<T>
-#pragma warning restore CS0661
-#pragma warning restore CS0660
 {
     public readonly ref T Value;
 
@@ -74,5 +71,15 @@ public readonly ref struct Ref<T>
     public static Ref<T> operator --(Ref<T> a)
     {
         return new(ref Unsafe.Subtract(ref a.Value, 1));
+    }
+
+    public override bool Equals(object? obj)
+    {
+        throw new NotSupportedException();
+    }
+
+    public override int GetHashCode()
+    {
+        throw new NotSupportedException();
     }
 }
