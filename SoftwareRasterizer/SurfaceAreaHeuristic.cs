@@ -1,20 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
 
 public static unsafe class SurfaceAreaHeuristic
 {
-    private readonly struct AabbComparer : Algo.IComparer<uint>
+    private readonly struct V128AabbComparer : Algo.IComparer<uint>
     {
         public readonly Aabb* aabbs;
         public readonly int mask;
 
-        public AabbComparer(Aabb* aabbs, int mask)
+        public V128AabbComparer(Aabb* aabbs, int mask)
         {
             this.aabbs = aabbs;
             this.mask = mask;
@@ -22,9 +22,35 @@ public static unsafe class SurfaceAreaHeuristic
 
         public bool Compare(in uint x, in uint y)
         {
-            Vector128<float> aabbX = aabbs[x].getCenter();
-            Vector128<float> aabbY = aabbs[y].getCenter();
-            return (Sse.MoveMask(Sse.CompareLessThan(aabbX, aabbY)) & mask) != 0;
+            Vector128<float> aabbX = aabbs[x].getCenter().AsVector128();
+            Vector128<float> aabbY = aabbs[y].getCenter().AsVector128();
+            return (Vector128.ExtractMostSignificantBits(Vector128.LessThan(aabbX, aabbY)) & mask) != 0;
+        }
+    }
+
+    private readonly struct ScalarAabbComparer : Algo.IComparer<uint>
+    {
+        public readonly Aabb* aabbs;
+        public readonly int mask;
+
+        public ScalarAabbComparer(Aabb* aabbs, int mask)
+        {
+            this.aabbs = aabbs;
+            this.mask = mask;
+        }
+
+        public bool Compare(in uint x, in uint y)
+        {
+            Vector4 aabbX = aabbs[x].getCenter();
+            Vector4 aabbY = aabbs[y].getCenter();
+
+            uint sum = 0;
+            sum |= aabbX.X < aabbY.X ? (1u << 0) : 0;
+            sum |= aabbX.Y < aabbY.Y ? (1u << 1) : 0;
+            sum |= aabbX.Z < aabbY.Z ? (1u << 2) : 0;
+            sum |= aabbX.W < aabbY.W ? (1u << 3) : 0;
+
+            return (sum & (uint)mask) != 0;
         }
     }
 
@@ -32,23 +58,33 @@ public static unsafe class SurfaceAreaHeuristic
     {
         uint numIndices = (uint)(indicesEnd - indicesStart);
 
-        Vector128<float> bestCost = Vector128.Create(float.PositiveInfinity);
+        float bestCost = float.PositiveInfinity;
 
         int bestAxis = -1;
         int bestIndex = -1;
 
-        Vector128<float>* areasFromLeft = (Vector128<float>*)NativeMemory.AlignedAlloc(
-            byteCount: numIndices * (uint)sizeof(Vector128<float>),
-            alignment: (uint)sizeof(Vector128<float>));
+        Vector4* areasFromLeft = (Vector4*)NativeMemory.AlignedAlloc(
+            byteCount: numIndices * (uint)sizeof(Vector4),
+            alignment: (uint)sizeof(Vector4));
 
-        Vector128<float>* areasFromRight = (Vector128<float>*)NativeMemory.AlignedAlloc(
-            byteCount: numIndices * (uint)sizeof(Vector128<float>),
-            alignment: (uint)sizeof(Vector128<float>));
+        Vector4* areasFromRight = (Vector4*)NativeMemory.AlignedAlloc(
+            byteCount: numIndices * (uint)sizeof(Vector4),
+            alignment: (uint)sizeof(Vector4));
+
+        Ref<uint> sortStart = Ref<uint>.FromPtr(indicesStart);
+        Ref<uint> sortEnd = Ref<uint>.FromPtr(indicesEnd);
 
         for (int splitAxis = 0; splitAxis < 3; ++splitAxis)
         {
             // Sort along center position
-            Algo.stable_sort(Ref<uint>.FromPtr(indicesStart), Ref<uint>.FromPtr(indicesEnd), new AabbComparer(aabbsIn, 1 << splitAxis));
+            if (Vector128.IsHardwareAccelerated)
+            {
+                Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1 << splitAxis));
+            }
+            else
+            {
+                Algo.stable_sort(sortStart, sortEnd, new ScalarAabbComparer(aabbsIn, 1 << splitAxis));
+            }
 
             Aabb fromLeft = new();
             for (uint i = 0; i < numIndices; ++i)
@@ -69,14 +105,14 @@ public static unsafe class SurfaceAreaHeuristic
                 int countLeft = (int)splitIndex;
                 int countRight = (int)(numIndices - splitIndex);
 
-                Vector128<float> areaLeft = areasFromLeft[splitIndex - 1];
-                Vector128<float> areaRight = areasFromRight[splitIndex];
-                Vector128<float> scaledAreaLeft = Sse.MultiplyScalar(areaLeft, Sse.ConvertScalarToVector128Single(Vector128<float>.Zero, countLeft));
-                Vector128<float> scaledAreaRight = Sse.MultiplyScalar(areaRight, Sse.ConvertScalarToVector128Single(Vector128<float>.Zero, countRight));
+                Vector4 areaLeft = areasFromLeft[splitIndex - 1];
+                Vector4 areaRight = areasFromRight[splitIndex];
+                float scaledAreaLeft = areaLeft.X * countLeft;
+                float scaledAreaRight = areaRight.X * countRight;
 
-                Vector128<float> cost = Sse.AddScalar(scaledAreaLeft, scaledAreaRight);
+                float cost = scaledAreaLeft + scaledAreaRight;
 
-                if (Sse.CompareScalarOrderedLessThan(cost, bestCost))
+                if (cost < bestCost)
                 {
                     bestCost = cost;
                     bestAxis = splitAxis;
@@ -89,7 +125,14 @@ public static unsafe class SurfaceAreaHeuristic
         NativeMemory.AlignedFree(areasFromRight);
 
         // Sort again according to best axis
-        Algo.stable_sort(Ref<uint>.FromPtr(indicesStart), Ref<uint>.FromPtr(indicesEnd), new AabbComparer(aabbsIn, 1 << bestAxis));
+        if (Vector128.IsHardwareAccelerated)
+        {
+            Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1 << bestAxis));
+        }
+        else
+        {
+            Algo.stable_sort(sortStart, sortEnd, new ScalarAabbComparer(aabbsIn, 1 << bestAxis));
+        }
 
         return bestIndex;
     }

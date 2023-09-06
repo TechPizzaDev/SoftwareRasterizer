@@ -80,8 +80,11 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         }
     }
 
-    public override bool queryVisibility(Vector128<float> boundsMin, Vector128<float> boundsMax, out bool needsClipping)
+    public override bool queryVisibility(Vector4 vBoundsMin, Vector4 vBoundsMax, out bool needsClipping)
     {
+        Vector128<float> boundsMin = vBoundsMin.AsVector128();
+        Vector128<float> boundsMax = vBoundsMax.AsVector128();
+
         // Frustum cull
         Vector128<float> extents = Sse.Subtract(boundsMax, boundsMin);
         Vector128<float> center = Sse.Add(boundsMax, boundsMin); // Bounding box center times 2 - but since W = 2, the plane equations work out correctly
@@ -514,8 +517,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         Vector128<float> mat2 = Sse.LoadVector128(m_modelViewProjection + 8);
         Vector128<float> mat3 = Sse.LoadVector128(m_modelViewProjection + 12);
 
-        Vector128<float> boundsMin = occluder.m_refMin;
-        Vector128<float> boundsExtents = Sse.Subtract(occluder.m_refMax, boundsMin);
+        Vector128<float> boundsMin = occluder.m_refMin.AsVector128();
+        Vector128<float> boundsExtents = Sse.Subtract(occluder.m_refMax.AsVector128(), boundsMin);
 
         // Bake integer => bounding box transform into matrix
         mat3 =
@@ -742,7 +745,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<int> modes;
             fixed (PrimitiveMode* modeTablePtr = modeTable)
             {
-                modes = Avx2.And(Avx2.GatherVector256((int*)modeTablePtr, config, 1), Vector256.Create(0xff));
+                modes = Avx2.GatherVector256((int*)modeTablePtr, config, 4);
             }
 
             if (Avx.TestZ(modes, modes))

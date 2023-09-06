@@ -1,6 +1,6 @@
 ﻿namespace SoftwareRasterizer;
 
-public enum PrimitiveMode : byte
+public enum PrimitiveMode : int
 {
     Culled = 0,
     Triangle0,
