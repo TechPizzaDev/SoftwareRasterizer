@@ -9,7 +9,6 @@ using System.Runtime.Intrinsics.X86;
 namespace SoftwareRasterizer;
 
 using static VectorMath;
-using static ScalarMath;
 
 using Vertex = Int32;
 
@@ -341,18 +340,31 @@ public static unsafe class QuadDecomposition
     // Maximum distance of vertices from original plane in world space units
     private const float MaximumDepthError = 0.5f;
 
-    private static bool CanMergeTrianglesToQuadSse41(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2, Vector128<float> v3)
+    private static bool CanMergeTrianglesToQuadV128(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2, Vector128<float> v3)
     {
         Vector128<float> n0 = normalize(normal(v0, v1, v2));
         Vector128<float> n2 = normalize(normal(v2, v3, v0));
 
-        Vector128<float> planeDistA = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n0, Sse.Subtract(v1, v3), 0x7F));
-        Vector128<float> planeDistB = Sse.AndNot(Vector128.Create(-0.0f), Sse41.DotProduct(n2, Sse.Subtract(v1, v3), 0x7F));
+        Vector128<float> planeDistA = Vector128.AndNot(DotProduct_x7F(n0, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
+        Vector128<float> planeDistB = Vector128.AndNot(DotProduct_x7F(n2, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
 
-        if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(MaximumDepthError)) ||
-            Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.Create(MaximumDepthError)))
+        if (Sse.IsSupported)
         {
-            return false;
+            if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(MaximumDepthError)) ||
+                Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.Create(MaximumDepthError)))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            float a = planeDistA.ToScalar();
+            float b = planeDistB.ToScalar();
+            if ((!float.IsNaN(a) && a > MaximumDepthError) ||
+                (!float.IsNaN(b) && b > MaximumDepthError))
+            {
+                return false;
+            }
         }
 
         return true;
@@ -360,19 +372,19 @@ public static unsafe class QuadDecomposition
 
     private static bool CanMergeTrianglesToQuad(Vector4 v0, Vector4 v1, Vector4 v2, Vector4 v3)
     {
-        if (Sse41.IsSupported)
+        if (Vector128.IsHardwareAccelerated)
         {
-            return CanMergeTrianglesToQuadSse41(v0.AsVector128(), v1.AsVector128(), v2.AsVector128(), v3.AsVector128());
+            return CanMergeTrianglesToQuadV128(v0.AsVector128(), v1.AsVector128(), v2.AsVector128(), v3.AsVector128());
         }
 
         Vector4 n0 = normalize(normal(v0, v1, v2));
         Vector4 n2 = normalize(normal(v2, v3, v0));
 
-        float planeDistA = NotZeroAnd(DotProduct_x7F(n0, v1 - v3));
-        float planeDistB = NotZeroAnd(DotProduct_x7F(n2, v1 - v3));
+        float planeDistA = ScalarMath.NotZeroAnd(ScalarMath.DotProduct_x7F(n0, v1 - v3));
+        float planeDistB = ScalarMath.NotZeroAnd(ScalarMath.DotProduct_x7F(n2, v1 - v3));
 
-        if ((planeDistA > MaximumDepthError) ||
-            (planeDistB > MaximumDepthError))
+        if ((!float.IsNaN(planeDistA) && planeDistA > MaximumDepthError) ||
+            (!float.IsNaN(planeDistB) && planeDistB > MaximumDepthError))
         {
             return false;
         }

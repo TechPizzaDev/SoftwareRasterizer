@@ -7,8 +7,46 @@ using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
 
-public static unsafe class VectorMath
+public static class VectorMath
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> DotProduct_x7F(Vector128<float> a, Vector128<float> b)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.DotProduct(a, b, 0x7F);
+        }
+        else if (Vector128.IsHardwareAccelerated)
+        {
+            Vector128<float> product = Vector128.Multiply(a, b).WithElement(3, 0.0f);
+            return Vector128.Create(Vector128.Sum(product));
+        }
+        else
+        {
+            float result = ScalarMath.DotProduct_x7F(a.AsVector4(), b.AsVector4());
+            return Vector128.Create(result);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> DotProduct(Vector128<float> a, Vector128<float> b)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.DotProduct(a, b, 0xFF);
+        }
+        else if (Vector128.IsHardwareAccelerated)
+        {
+            Vector128<float> product = Vector128.Multiply(a, b);
+            return Vector128.Create(Vector128.Sum(product));
+        }
+        else
+        {
+            float result = ScalarMath.DotProduct(a.AsVector4(), b.AsVector4());
+            return Vector128.Create(result);
+        }
+    }
+
     // Cross product
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> cross(Vector128<float> a, Vector128<float> b)
@@ -29,7 +67,7 @@ public static unsafe class VectorMath
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> normalize(Vector128<float> v)
     {
-        return Sse.Multiply(v, Sse.ReciprocalSqrt(Sse41.DotProduct(v, v, 0x7F)));
+        return Sse.Multiply(v, Sse.ReciprocalSqrt(DotProduct_x7F(v, v)));
     }
 
     // Normal vector of triangle
@@ -42,7 +80,7 @@ public static unsafe class VectorMath
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector4 normalize(Vector4 v)
     {
-        return Sse.Multiply(v.AsVector128(), Sse.ReciprocalSqrt(Sse41.DotProduct(v.AsVector128(), v.AsVector128(), 0x7F))).AsVector4();
+        return Sse.Multiply(v.AsVector128(), Sse.ReciprocalSqrt(DotProduct_x7F(v.AsVector128(), v.AsVector128()))).AsVector4();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -187,8 +225,18 @@ public struct Aabb
 
     public readonly Vector4 surfaceArea()
     {
-        Vector128<float> extents = getExtents().AsVector128();
-        Vector128<float> extents2 = Sse.Shuffle(extents, extents, 0b11_00_10_01);
-        return Sse41.DotProduct(extents, extents2, 0x7F).AsVector4();
+        if (Vector128.IsHardwareAccelerated)
+        {
+            Vector128<float> extents = getExtents().AsVector128();
+            Vector128<float> extents2 = Vector128.Shuffle(extents, Vector128.Create(1, 2, 0, 3));
+            return VectorMath.DotProduct(extents, extents2).AsVector4();
+        }
+        else
+        {
+            Vector4 extents = getExtents();
+            Vector4 extents2 = new(extents.Y, extents.Z, extents.X, extents.W);
+            float dot = ScalarMath.DotProduct_x7F(extents, extents2);
+            return new Vector4(dot, dot, dot, 0);
+        }
     }
 }
