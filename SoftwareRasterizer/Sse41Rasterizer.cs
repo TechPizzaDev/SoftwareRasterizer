@@ -7,7 +7,6 @@ using System.Runtime.Intrinsics.X86;
 namespace SoftwareRasterizer;
 
 using static VectorMath;
-using Fma = SoftFma;
 
 public unsafe class Sse41Rasterizer : Rasterizer
 {
@@ -1344,5 +1343,26 @@ public unsafe class Sse41Rasterizer : Rasterizer
     private static Vector128<float> BroadcastScalarToVector128(Vector128<float> a)
     {
         return Vector128.Create(a.ToScalar());
+    }
+
+    internal static class Fma
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector128<float> MultiplyAdd(Vector128<float> a, Vector128<float> b, Vector128<float> c)
+        {
+            return Sse.Add(Sse.Multiply(a, b), c);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector128<float> MultiplyAddNegated(Vector128<float> a, Vector128<float> b, Vector128<float> c)
+        {
+            return Sse.Subtract(c, Sse.Multiply(a, b));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector128<float> MultiplySubtract(Vector128<float> a, Vector128<float> b, Vector128<float> c)
+        {
+            return Sse.Subtract(Sse.Multiply(a, b), c);
+        }
     }
 }
