@@ -103,14 +103,17 @@ public static unsafe class SurfaceAreaHeuristic
 
         for (int i = 0; i < 2; ++i)
         {
-            long batchSize = range[i + 1] - range[i];
+            uint* start = range[i];
+            uint* end = range[i + 1];
+
+            long batchSize = end - start;
             if (batchSize < targetSize)
             {
-                result.Add(new Vector(range[i], range[i + 1]));
+                result.Add(new Vector(start, end));
             }
             else
             {
-                generateBatchesRecursive(aabbsIn, targetSize, splitGranularity, range[i], range[i + 1], result);
+                generateBatchesRecursive(aabbsIn, targetSize, splitGranularity, start, end, result);
             }
         }
     }

@@ -1037,7 +1037,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 continue;
             }
 
-            rasterizeLoop<T>(
+            rasterizeLoop(
                 validMask,
                 depthBounds,
                 depthPlane,
@@ -1048,11 +1048,12 @@ public unsafe class Sse41Rasterizer : Rasterizer
                 firstBlocks,
                 rangesX,
                 rangesY,
-                primModes);
+                primModes,
+                T.PossiblyNearClipped);
         }
     }
 
-    private void rasterizeLoop<T>(
+    private void rasterizeLoop(
         uint validMask,
         ushort* depthBounds,
         Vector128<float>* depthPlane,
@@ -1063,8 +1064,8 @@ public unsafe class Sse41Rasterizer : Rasterizer
         uint* firstBlocks,
         uint* rangesX,
         uint* rangesY,
-        uint* primModes)
-        where T : IPossiblyNearClipped
+        uint* primModes,
+        bool possiblyNearClipped)
     {
         // Fetch data pointers since we'll manually strength-reduce memory arithmetic
         ulong* pTable = (ulong*)m_precomputedRasterTables.DangerousGetHandle();
@@ -1216,7 +1217,7 @@ public unsafe class Sse41Rasterizer : Rasterizer
 
                             default:
                                 // Case ConcaveCenter can only occur if any W < 0
-                                if (T.PossiblyNearClipped)
+                                if (possiblyNearClipped)
                                 {
                                     // case ConcaveCenter:			// < 1e-6%
                                     blockMask = (A & B) | (C & D);
