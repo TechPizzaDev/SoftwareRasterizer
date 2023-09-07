@@ -174,7 +174,7 @@ public static unsafe class Main
         return 0;
     }
 
-    static List<double> samples = new();
+    static Queue<double> samples = new();
 
     static long lastPaint = Stopwatch.GetTimestamp();
 
@@ -218,17 +218,16 @@ public static unsafe class Main
 
                 double rasterTime = Stopwatch.GetElapsedTime(raster_start, raster_end).TotalMilliseconds;
 
-                samples.Add(rasterTime);
+                samples.Enqueue(rasterTime);
 
                 double avgRasterTime = samples.Sum() / samples.Count;
                 double sqSum = samples.Select(x => x * x).Sum();
                 double stDev = Math.Sqrt(sqSum / samples.Count - avgRasterTime * avgRasterTime);
 
-                //std::nth_element(samples.begin(), samples.begin() + samples.size() / 2, samples.end());
-                double median = samples[samples.Count / 2];
+                double median = samples.Order().ElementAt(samples.Count / 2);
 
-                if (samples.Count > 100)
-                    samples.Clear();
+                while (samples.Count > 60 * 10)
+                    samples.Dequeue();
 
                 int fps = (int)(1000.0f / avgRasterTime);
 
@@ -358,8 +357,8 @@ public static unsafe class Main
 
             if (Sse.IsSupported)
             {
-            return Sse.CompareScalarOrderedLessThan(a, b);
-        }
+                return Sse.CompareScalarOrderedLessThan(a, b);
+            }
             else
             {
                 float sA = a.ToScalar();
