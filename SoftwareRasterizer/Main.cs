@@ -197,7 +197,7 @@ public static unsafe class Main
                 g_rasterizer.setModelViewProjection(mvp);
 
                 // Sort front to back
-                Algo.sort(CollectionsMarshal.AsSpan(g_occluders), new Sse41OccluderComparer(new Vector4(g_cameraPosition, 0)));
+                Algo.sort(CollectionsMarshal.AsSpan(g_occluders), new OccluderComparerV128(new Vector4(g_cameraPosition, 0)));
 
                 foreach (ref readonly Occluder occluder in CollectionsMarshal.AsSpan(g_occluders))
                 {
@@ -308,11 +308,11 @@ public static unsafe class Main
                 if ((GetAsyncKeyState('R') & 1) != 0)
                 {
                     var previousRasterizer = g_rasterizer;
-                    if (previousRasterizer is Avx2Rasterizer<FmaAvx> or Avx2Rasterizer<FmaX86>)
+                    if (previousRasterizer is Avx2Rasterizer<FmaIntrinsic> or Avx2Rasterizer<FmaX86>)
                     {
-                        g_rasterizer = Sse41Rasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+                        g_rasterizer = Sse41Rasterizer<FmaIntrinsic>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
                     }
-                    else if (previousRasterizer is Sse41Rasterizer)
+                    else if (previousRasterizer is Sse41Rasterizer<FmaIntrinsic>)
                     {
                         g_rasterizer = ScalarRasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
                     }
@@ -339,11 +339,11 @@ public static unsafe class Main
         return 0;
     }
 
-    readonly struct Sse41OccluderComparer : Algo.IComparer<Occluder>
+    readonly struct OccluderComparerV128 : Algo.IComparer<Occluder>
     {
         public readonly Vector4 CameraPosition;
 
-        public Sse41OccluderComparer(Vector4 cameraPosition)
+        public OccluderComparerV128(Vector4 cameraPosition)
         {
             CameraPosition = cameraPosition;
         }
@@ -353,10 +353,19 @@ public static unsafe class Main
             Vector128<float> dist1 = (x.m_center - CameraPosition).AsVector128();
             Vector128<float> dist2 = (y.m_center - CameraPosition).AsVector128();
 
-            Vector128<float> a = Sse41.DotProduct(dist1, dist1, 0x7f);
-            Vector128<float> b = Sse41.DotProduct(dist2, dist2, 0x7f);
+            Vector128<float> a = DotProduct_x7F(dist1, dist1);
+            Vector128<float> b = DotProduct_x7F(dist2, dist2);
 
+            if (Sse.IsSupported)
+            {
             return Sse.CompareScalarOrderedLessThan(a, b);
+        }
+            else
+            {
+                float sA = a.ToScalar();
+                float sB = b.ToScalar();
+                return !float.IsNaN(sA) && !float.IsNaN(sB) && sA < sB;
+            }
         }
     }
 

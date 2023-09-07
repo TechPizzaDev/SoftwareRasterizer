@@ -8,7 +8,8 @@ namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe class Sse41Rasterizer : Rasterizer
+public unsafe class Sse41Rasterizer<Fma> : Rasterizer
+    where Fma : IFusedMultiplyAdd128
 {
     private const int Alignment = 128 / 8; // sizeof(Vector128<>)
 
@@ -17,13 +18,13 @@ public unsafe class Sse41Rasterizer : Rasterizer
     {
     }
 
-    public static Sse41Rasterizer Create(RasterizationTable rasterizationTable, uint width, uint height)
+    public static Sse41Rasterizer<Fma> Create(RasterizationTable rasterizationTable, uint width, uint height)
     {
         bool success = false;
         rasterizationTable.DangerousAddRef(ref success);
         if (success)
         {
-            return new Sse41Rasterizer(rasterizationTable, width, height);
+            return new Sse41Rasterizer<Fma>(rasterizationTable, width, height);
         }
         throw new ObjectDisposedException(rasterizationTable.GetType().Name);
     }
@@ -1344,26 +1345,5 @@ public unsafe class Sse41Rasterizer : Rasterizer
     private static Vector128<float> BroadcastScalarToVector128(Vector128<float> a)
     {
         return Vector128.Create(a.ToScalar());
-    }
-
-    internal static class Fma
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector128<float> MultiplyAdd(Vector128<float> a, Vector128<float> b, Vector128<float> c)
-        {
-            return Sse.Add(Sse.Multiply(a, b), c);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector128<float> MultiplyAddNegated(Vector128<float> a, Vector128<float> b, Vector128<float> c)
-        {
-            return Sse.Subtract(c, Sse.Multiply(a, b));
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector128<float> MultiplySubtract(Vector128<float> a, Vector128<float> b, Vector128<float> c)
-        {
-            return Sse.Subtract(Sse.Multiply(a, b), c);
-        }
     }
 }

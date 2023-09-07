@@ -9,7 +9,7 @@ namespace SoftwareRasterizer;
 using static VectorMath;
 
 public unsafe class Avx2Rasterizer<Fma> : Rasterizer
-    where Fma : IFusedMultiplyAdd
+    where Fma : IFusedMultiplyAdd128, IFusedMultiplyAdd256
 {
     private const FloatComparisonMode _CMP_LT_OQ = FloatComparisonMode.OrderedLessThanNonSignaling;
     private const FloatComparisonMode _CMP_LE_OQ = FloatComparisonMode.OrderedLessThanOrEqualNonSignaling;

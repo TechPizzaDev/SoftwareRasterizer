@@ -3,9 +3,11 @@ using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
 
-public readonly struct FmaX86 : IFusedMultiplyAdd
+public readonly struct FmaX86 : IFusedMultiplyAdd128, IFusedMultiplyAdd256
 {
-    public static bool IsSupported => Fma.IsSupported;
+    public static bool IsHardwareAccelerated128 => Fma.IsSupported;
+
+    public static bool IsHardwareAccelerated256 => Fma.IsSupported;
 
     public static Vector128<float> MultiplyAdd(Vector128<float> a, Vector128<float> b, Vector128<float> c)
     {
