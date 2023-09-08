@@ -13,36 +13,36 @@ public static class VectorMath
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> cross(Vector128<float> a, Vector128<float> b)
     {
-        Vector128<float> a_yzx = Sse.Shuffle(a, a, 0b11_00_10_01);
-        Vector128<float> b_yzx = Sse.Shuffle(b, b, 0b11_00_10_01);
-        Vector128<float> c = Sse.Subtract(Sse.Multiply(a, b_yzx), Sse.Multiply(a_yzx, b));
-        return Sse.Shuffle(c, c, 0b11_00_10_01);
+        Vector128<float> a_yzx = Vector128.Shuffle(a, Vector128.Create(1, 2, 0, 3));
+        Vector128<float> b_yzx = Vector128.Shuffle(b, Vector128.Create(1, 2, 0, 3));
+        Vector128<float> c = Vector128.Subtract(Vector128.Multiply(a, b_yzx), Vector128.Multiply(a_yzx, b));
+        return Vector128.Shuffle(c, Vector128.Create(1, 2, 0, 3));
     }
 
     // Normal vector of triangle
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> normal(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2)
     {
-        return cross(Sse.Subtract(v1, v0), Sse.Subtract(v2, v0));
+        return cross(Vector128.Subtract(v1, v0), Vector128.Subtract(v2, v0));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> normalize(Vector128<float> v)
     {
-        return Sse.Multiply(v, Sse.ReciprocalSqrt(DotProduct_x7F(v, v)));
+        return Vector128.Multiply(v, V128Helper.ReciprocalSqrt(V128Helper.DotProduct_x7F(v, v)));
     }
 
     // Normal vector of triangle
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector4 normal(Vector4 v0, Vector4 v1, Vector4 v2)
     {
-        return cross((v1 - v0).AsVector128(), (v2 - v0).AsVector128()).AsVector4();
+        return normal(v0.AsVector128(), v1.AsVector128(), v2.AsVector128()).AsVector4();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector4 normalize(Vector4 v)
     {
-        return Sse.Multiply(v.AsVector128(), Sse.ReciprocalSqrt(DotProduct_x7F(v.AsVector128(), v.AsVector128()))).AsVector4();
+        return normalize(v.AsVector128()).AsVector4();
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
