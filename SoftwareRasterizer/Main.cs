@@ -352,8 +352,8 @@ public static unsafe class Main
             Vector128<float> dist1 = (x.m_center - CameraPosition).AsVector128();
             Vector128<float> dist2 = (y.m_center - CameraPosition).AsVector128();
 
-            Vector128<float> a = DotProduct_x7F(dist1, dist1);
-            Vector128<float> b = DotProduct_x7F(dist2, dist2);
+            Vector128<float> a = V128Helper.DotProduct_x7F(dist1, dist1);
+            Vector128<float> b = V128Helper.DotProduct_x7F(dist2, dist2);
 
             if (Sse.IsSupported)
             {

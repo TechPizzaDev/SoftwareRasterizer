@@ -9,44 +9,6 @@ namespace SoftwareRasterizer;
 
 public static class VectorMath
 {
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector128<float> DotProduct_x7F(Vector128<float> a, Vector128<float> b)
-    {
-        if (Sse41.IsSupported)
-        {
-            return Sse41.DotProduct(a, b, 0x7F);
-        }
-        else if (Vector128.IsHardwareAccelerated)
-        {
-            Vector128<float> product = Vector128.Multiply(a, b).WithElement(3, 0.0f);
-            return Vector128.Create(Vector128.Sum(product));
-        }
-        else
-        {
-            float result = ScalarMath.DotProduct_x7F(a.AsVector4(), b.AsVector4());
-            return Vector128.Create(result);
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector128<float> DotProduct(Vector128<float> a, Vector128<float> b)
-    {
-        if (Sse41.IsSupported)
-        {
-            return Sse41.DotProduct(a, b, 0xFF);
-        }
-        else if (Vector128.IsHardwareAccelerated)
-        {
-            Vector128<float> product = Vector128.Multiply(a, b);
-            return Vector128.Create(Vector128.Sum(product));
-        }
-        else
-        {
-            float result = ScalarMath.DotProduct(a.AsVector4(), b.AsVector4());
-            return Vector128.Create(result);
-        }
-    }
-
     // Cross product
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> cross(Vector128<float> a, Vector128<float> b)

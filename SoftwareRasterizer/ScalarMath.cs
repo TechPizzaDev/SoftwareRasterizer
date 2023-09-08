@@ -60,43 +60,16 @@ namespace SoftwareRasterizer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float DotProduct_x7F(Vector4 left, Vector4 right)
         {
-            float sum =
-                left.X * right.X +
-                left.Y * right.Y +
-                left.Z * right.Z;
-            return sum;
+            Vector3 a = left.AsVector128().AsVector3();
+            Vector3 b = right.AsVector128().AsVector3();
+            return Vector3.Dot(a, b);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float DotProduct_x7F(Vector4 left)
         {
-            float sum =
-                left.X * left.X +
-                left.Y * left.Y +
-                left.Z * left.Z;
-            return sum;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float DotProduct(Vector4 left, Vector4 right)
-        {
-            float sum =
-                left.X * right.X +
-                left.Y * right.Y +
-                left.Z * right.Z +
-                left.W * right.W;
-            return sum;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float DotProduct(Vector4 left)
-        {
-            float sum =
-                left.X * left.X +
-                left.Y * left.Y +
-                left.Z * left.Z +
-                left.W * left.W;
-            return sum;
+            Vector3 v = left.AsVector128().AsVector3();
+            return Vector3.Dot(v, v);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -214,12 +187,6 @@ namespace SoftwareRasterizer
         public static Vector4 CompareGreaterThan(Vector4 a, Vector4 b)
         {
             return Sse.CompareGreaterThan(a.AsVector128(), b.AsVector128()).AsVector4();
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 DotProduct(Vector4 a, Vector4 b, byte control)
-        {
-            return Sse41.DotProduct(a.AsVector128(), b.AsVector128(), control).AsVector4();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
