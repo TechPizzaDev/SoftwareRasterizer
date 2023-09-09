@@ -42,7 +42,7 @@ public struct Aabb
         {
             Vector128<float> extents = getExtents().AsVector128();
             Vector128<float> extents2 = Vector128.Shuffle(extents, Vector128.Create(1, 2, 0, 3));
-            return VectorMath.DotProduct(extents, extents2).AsVector4();
+            return new Vector4(Vector128.Dot(extents, extents2));
         }
         else
         {

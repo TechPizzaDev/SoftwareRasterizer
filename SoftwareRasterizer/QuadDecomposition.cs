@@ -345,8 +345,8 @@ public static unsafe class QuadDecomposition
         Vector128<float> n0 = normalize(normal(v0, v1, v2));
         Vector128<float> n2 = normalize(normal(v2, v3, v0));
 
-        Vector128<float> planeDistA = Vector128.AndNot(DotProduct_x7F(n0, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
-        Vector128<float> planeDistB = Vector128.AndNot(DotProduct_x7F(n2, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
+        Vector128<float> planeDistA = Vector128.AndNot(V128Helper.DotProduct_x7F(n0, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
+        Vector128<float> planeDistB = Vector128.AndNot(V128Helper.DotProduct_x7F(n2, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
 
         if (Sse.IsSupported)
         {
