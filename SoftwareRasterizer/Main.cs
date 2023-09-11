@@ -199,6 +199,9 @@ public static unsafe class Main
                 // Sort front to back
                 Algo.sort(CollectionsMarshal.AsSpan(g_occluders), new OccluderComparerV128(new Vector4(g_cameraPosition, 0)));
 
+                int clips = 0;
+                int notClips = 0;
+                int misses = 0;
                 foreach (ref readonly Occluder occluder in CollectionsMarshal.AsSpan(g_occluders))
                 {
                     if (g_rasterizer.queryVisibility(occluder.m_boundsMin, occluder.m_boundsMax, out bool needsClipping))
@@ -206,15 +209,22 @@ public static unsafe class Main
                         if (needsClipping)
                         {
                             g_rasterizer.rasterize<Rasterizer.NearClipped>(occluder);
+                            clips++;
                         }
                         else
                         {
                             g_rasterizer.rasterize<Rasterizer.NotNearClipped>(occluder);
+                            notClips++;
                         }
+                    }
+                    else
+                    {
+                        misses++;
                     }
                 }
 
                 long raster_end = Stopwatch.GetTimestamp();
+                //Console.WriteLine(clips + " - " + notClips + " - " + misses);
 
                 double rasterTime = Stopwatch.GetElapsedTime(raster_start, raster_end).TotalMilliseconds;
 
@@ -227,7 +237,9 @@ public static unsafe class Main
                 double median = samples.Order().ElementAt(samples.Count / 2);
 
                 while (samples.Count > 60 * 10)
+                {
                     samples.Dequeue();
+                }
 
                 int fps = (int)(1000.0f / avgRasterTime);
 
