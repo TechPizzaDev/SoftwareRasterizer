@@ -173,7 +173,7 @@ public unsafe class Sse41Rasterizer<Fma> : Rasterizer
         maxExtent = Sse.Max(maxExtent, Permute(maxExtent, 0b10_11_00_01));
         Vector128<float> nearPlaneEpsilon = Sse.Multiply(maxExtent, Vector128.Create(0.001f));
         Vector128<float> closeToNearPlane = Sse.Or(Sse.CompareLessThan(corners3, nearPlaneEpsilon), Sse.CompareLessThan(corners7, nearPlaneEpsilon));
-        if (!TestZ(closeToNearPlane, closeToNearPlane))
+        if (!V128Helper.TestZ(closeToNearPlane, closeToNearPlane))
         {
             needsClipping = true;
             return true;
@@ -1164,7 +1164,7 @@ public unsafe class Sse41Rasterizer<Fma> : Rasterizer
                     {
                         // Simplified conservative test: combined block mask will be zero if any offset is outside of range
                         Vector128<float> anyOffsetOutsideMask = Sse.CompareGreaterThanOrEqual(offset, Vector128.Create((float)(OFFSET_QUANTIZATION_FACTOR - 1)));
-                        if (!TestZ(anyOffsetOutsideMask, anyOffsetOutsideMask))
+                        if (!V128Helper.TestZ(anyOffsetOutsideMask, anyOffsetOutsideMask))
                         {
                             if (anyBlockHit)
                             {
@@ -1326,13 +1326,6 @@ public unsafe class Sse41Rasterizer<Fma> : Rasterizer
                 }
             }
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TestZ(Vector128<float> a, Vector128<float> b)
-    {
-        Vector128<float> mask = Vector128.Create(0x80000000u).AsSingle();
-        return Sse41.TestZ(Sse.And(a, mask).AsUInt32(), Sse.And(b, mask).AsUInt32());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
