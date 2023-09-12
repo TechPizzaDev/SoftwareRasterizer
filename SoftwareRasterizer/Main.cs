@@ -321,9 +321,9 @@ public static unsafe class Main
                     var previousRasterizer = g_rasterizer;
                     if (previousRasterizer is Avx2Rasterizer<FmaIntrinsic> or Avx2Rasterizer<FmaX86>)
                     {
-                        g_rasterizer = Sse41Rasterizer<FmaIntrinsic>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+                        g_rasterizer = V128Rasterizer<FmaX86>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
                     }
-                    else if (previousRasterizer is Sse41Rasterizer<FmaIntrinsic>)
+                    else if (previousRasterizer is V128Rasterizer<FmaIntrinsic> or V128Rasterizer<FmaX86>)
                     {
                         g_rasterizer = ScalarRasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
                     }

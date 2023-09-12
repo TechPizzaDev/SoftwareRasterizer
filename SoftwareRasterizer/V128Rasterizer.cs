@@ -8,23 +8,23 @@ namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe class Sse41Rasterizer<Fma> : Rasterizer
+public unsafe class V128Rasterizer<Fma> : Rasterizer
     where Fma : IFusedMultiplyAdd128
 {
     private const int Alignment = 128 / 8; // sizeof(Vector128<>)
 
-    public Sse41Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
+    public V128Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
         base(rasterizationTable, width, height, Alignment)
     {
     }
 
-    public static Sse41Rasterizer<Fma> Create(RasterizationTable rasterizationTable, uint width, uint height)
+    public static V128Rasterizer<Fma> Create(RasterizationTable rasterizationTable, uint width, uint height)
     {
         bool success = false;
         rasterizationTable.DangerousAddRef(ref success);
         if (success)
         {
-            return new Sse41Rasterizer<Fma>(rasterizationTable, width, height);
+            return new V128Rasterizer<Fma>(rasterizationTable, width, height);
         }
         throw new ObjectDisposedException(rasterizationTable.GetType().Name);
     }
