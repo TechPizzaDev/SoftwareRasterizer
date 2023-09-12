@@ -82,9 +82,10 @@ internal struct Vector4I
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TestZ(Vector4I a, Vector4I b)
+    public static bool TestZ(Vector4I a)
     {
-        return (Unsafe.As<Vector4I, UInt128>(ref a) & Unsafe.As<Vector4I, UInt128>(ref b)) == 0;
+        UInt128 v = Unsafe.As<Vector4I, UInt128>(ref a);
+        return v == 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -108,6 +109,20 @@ internal struct Vector4I
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector4I operator -(Vector4I a)
+    {
+        UInt128 res = -Unsafe.As<Vector4I, UInt128>(ref a);
+        return Unsafe.As<UInt128, Vector4I>(ref res);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector4I operator ~(Vector4I a)
+    {
+        UInt128 res = ~Unsafe.As<Vector4I, UInt128>(ref a);
+        return Unsafe.As<UInt128, Vector4I>(ref res);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector4I operator &(Vector4I a, Vector4I b)
     {
         UInt128 res = Unsafe.As<Vector4I, UInt128>(ref a) & Unsafe.As<Vector4I, UInt128>(ref b);
@@ -118,6 +133,13 @@ internal struct Vector4I
     public static Vector4I operator |(Vector4I a, Vector4I b)
     {
         UInt128 res = Unsafe.As<Vector4I, UInt128>(ref a) | Unsafe.As<Vector4I, UInt128>(ref b);
+        return Unsafe.As<UInt128, Vector4I>(ref res);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector4I operator ^(Vector4I a, Vector4I b)
+    {
+        UInt128 res = Unsafe.As<Vector4I, UInt128>(ref a) ^ Unsafe.As<Vector4I, UInt128>(ref b);
         return Unsafe.As<UInt128, Vector4I>(ref res);
     }
 

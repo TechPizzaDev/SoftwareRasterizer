@@ -150,49 +150,83 @@ namespace SoftwareRasterizer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 Xor(Vector4 a, Vector4 b)
         {
-            return Sse.Xor(a.AsVector128(), b.AsVector128()).AsVector4();
+            return (a.AsVector128() ^ b.AsVector128()).AsVector4();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Or(Vector4 a, Vector4 b)
+        public static uint MoveMask(Vector4 a)
         {
-            return Sse.Or(a.AsVector128(), b.AsVector128()).AsVector4();
+            return a.AsVector128().ExtractMostSignificantBits();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int MoveMask(Vector4 a)
+        public static Vector4I CompareLessThanOrEqual(Vector4 a, Vector4 b)
         {
-            return Sse.MoveMask(a.AsVector128());
+            unchecked
+            {
+                return new Vector4I(
+                    a.X <= b.X ? (int)0xFFFFFFFF : 0,
+                    a.Y <= b.Y ? (int)0xFFFFFFFF : 0,
+                    a.Z <= b.Z ? (int)0xFFFFFFFF : 0,
+                    a.W <= b.W ? (int)0xFFFFFFFF : 0);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 CompareLessThanOrEqual(Vector4 a, Vector4 b)
+        public static Vector4I CompareLessThan(Vector4 a, Vector4 b)
         {
-            return Sse.CompareLessThanOrEqual(a.AsVector128(), b.AsVector128()).AsVector4();
+            unchecked
+            {
+                return new Vector4I(
+                    a.X < b.X ? (int)0xFFFFFFFF : 0,
+                    a.Y < b.Y ? (int)0xFFFFFFFF : 0,
+                    a.Z < b.Z ? (int)0xFFFFFFFF : 0,
+                    a.W < b.W ? (int)0xFFFFFFFF : 0);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 CompareLessThan(Vector4 a, Vector4 b)
+        public static Vector4I CompareGreaterThanOrEqual(Vector4 a, Vector4 b)
         {
-            return Sse.CompareLessThan(a.AsVector128(), b.AsVector128()).AsVector4();
+            unchecked
+            {
+                return new Vector4I(
+                    a.X >= b.X ? (int)0xFFFFFFFF : 0,
+                    a.Y >= b.Y ? (int)0xFFFFFFFF : 0,
+                    a.Z >= b.Z ? (int)0xFFFFFFFF : 0,
+                    a.W >= b.W ? (int)0xFFFFFFFF : 0);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 CompareGreaterThanOrEqual(Vector4 a, Vector4 b)
+        public static Vector4I CompareGreaterThan(Vector4 a, Vector4 b)
         {
-            return Sse.CompareGreaterThanOrEqual(a.AsVector128(), b.AsVector128()).AsVector4();
+            unchecked
+            {
+                return new Vector4I(
+                    a.X > b.X ? (int)0xFFFFFFFF : 0,
+                    a.Y > b.Y ? (int)0xFFFFFFFF : 0,
+                    a.Z > b.Z ? (int)0xFFFFFFFF : 0,
+                    a.W > b.W ? (int)0xFFFFFFFF : 0);
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 CompareGreaterThan(Vector4 a, Vector4 b)
+        public static Vector4I BlendVariable(Vector4I a, Vector4I b, Vector4I c)
         {
-            return Sse.CompareGreaterThan(a.AsVector128(), b.AsVector128()).AsVector4();
+            return (Vector4I)Sse41.BlendVariable(a, b, c);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 BlendVariable(Vector4 a, Vector4 b, Vector4 c)
+        public static Vector4 Permute(Vector4 a, byte imm8)
         {
-            return Sse41.BlendVariable(a.AsVector128(), b.AsVector128(), c.AsVector128()).AsVector4();
+            return Sse.Shuffle(a.AsVector128(), a.AsVector128(), imm8).AsVector4();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4 BlendVariable(Vector4 a, Vector4 b, Vector4I c)
+        {
+            return Sse41.BlendVariable(a.AsVector128(), b.AsVector128(), c.AsSingle().AsVector128()).AsVector4();
         }
     }
 }
