@@ -87,38 +87,54 @@ public unsafe class ScalarRasterizer : Rasterizer
         Vector4 row2 = Unsafe.ReadUnaligned<Vector4>(m_modelViewProjectionRaw + 8);
         Vector4 row3 = Unsafe.ReadUnaligned<Vector4>(m_modelViewProjectionRaw + 12);
 
+        needsClipping = false;
+
         // Compute distance from each frustum plane
         Vector4 plane0 = (row3 + row0);
         Vector4 offset0 = (center + Xor(extents, And(plane0, minusZero)));
-        Vector4 dist0 = DotProduct(plane0, offset0, 0xff);
+        float dist0 = Vector4.Dot(plane0, offset0);
+        if (float.IsNegative(dist0))
+        {
+            return false;
+        }
 
         Vector4 plane1 = (row3 - row0);
         Vector4 offset1 = (center + Xor(extents, And(plane1, minusZero)));
-        Vector4 dist1 = DotProduct(plane1, offset1, 0xff);
+        float dist1 = Vector4.Dot(plane1, offset1);
+        if (float.IsNegative(dist1))
+        {
+            return false;
+        }
 
         Vector4 plane2 = (row3 + row1);
         Vector4 offset2 = (center + Xor(extents, And(plane2, minusZero)));
-        Vector4 dist2 = DotProduct(plane2, offset2, 0xff);
+        float dist2 = Vector4.Dot(plane2, offset2);
+        if (float.IsNegative(dist2))
+        {
+            return false;
+        }
 
         Vector4 plane3 = (row3 - row1);
         Vector4 offset3 = (center + Xor(extents, And(plane3, minusZero)));
-        Vector4 dist3 = DotProduct(plane3, offset3, 0xff);
+        float dist3 = Vector4.Dot(plane3, offset3);
+        if (float.IsNegative(dist3))
+        {
+            return false;
+        }
 
         Vector4 plane4 = (row3 + row2);
         Vector4 offset4 = (center + Xor(extents, And(plane4, minusZero)));
-        Vector4 dist4 = DotProduct(plane4, offset4, 0xff);
+        float dist4 = Vector4.Dot(plane4, offset4);
+        if (float.IsNegative(dist4))
+        {
+            return false;
+        }
 
         Vector4 plane5 = (row3 - row2);
         Vector4 offset5 = (center + Xor(extents, And(plane5, minusZero)));
-        Vector4 dist5 = DotProduct(plane5, offset5, 0xff);
-
-        // Combine plane distance signs
-        Vector4 combined = Or(Or(Or(dist0, dist1), Or(dist2, dist3)), Or(dist4, dist5));
-
-        // Can't use Avx.TestZ or _mm_comile_ss here because the OR's above created garbage in the non-sign bits
-        if (MoveMask(combined) != 0)
+        float dist5 = Vector4.Dot(plane5, offset5);
+        if (float.IsNegative(dist5))
         {
-            needsClipping = false;
             return false;
         }
 
@@ -168,25 +184,23 @@ public unsafe class ScalarRasterizer : Rasterizer
         Vector4 maxExtent = Vector4.Max(extents, Permute(extents, 0b01_00_11_10));
         maxExtent = Vector4.Max(maxExtent, Permute(maxExtent, 0b10_11_00_01));
         Vector4 nearPlaneEpsilon = (maxExtent * (0.001f));
-        Vector4 closeToNearPlane = Or(CompareLessThan(corners3, nearPlaneEpsilon), CompareLessThan(corners7, nearPlaneEpsilon));
-        if (!TestZ(closeToNearPlane, closeToNearPlane))
+        Vector4I closeToNearPlane = (CompareLessThan(corners3, nearPlaneEpsilon) | CompareLessThan(corners7, nearPlaneEpsilon));
+        if (!Vector4I.TestZ(closeToNearPlane))
         {
             needsClipping = true;
             return true;
         }
 
-        needsClipping = false;
-
         // Perspective division
         corners3 = Reciprocal(corners3);
-        corners0 = (corners0 * corners3);
-        corners1 = (corners1 * corners3);
-        corners2 = (corners2 * corners3);
+        corners0 *= corners3;
+        corners1 *= corners3;
+        corners2 *= corners3;
 
         corners7 = Reciprocal(corners7);
-        corners4 = (corners4 * corners7);
-        corners5 = (corners5 * corners7);
-        corners6 = (corners6 * corners7);
+        corners4 *= corners7;
+        corners5 *= corners7;
+        corners6 *= corners7;
 
         // Vertical mins and maxes
         Vector4 minsX = Vector4.Min(corners0, corners4);
@@ -230,7 +244,7 @@ public unsafe class ScalarRasterizer : Rasterizer
 
         Vector128<ushort> depth = packDepthPremultiplied(corners2, corners6);
 
-        ushort maxZ = (ushort)(0xFFFFu ^ Sse2.Extract(Sse41.MinHorizontal(Sse2.Xor(depth, Vector128.Create((short)-1).AsUInt16())), 0));
+        ushort maxZ = (ushort)(0xFFFFu ^ Sse41.MinHorizontal(Sse2.Xor(depth, Vector128.Create((short)-1).AsUInt16())).ToScalar());
 
         if (!query2D(minX, maxX, minY, maxY, maxZ))
         {
@@ -423,10 +437,10 @@ public unsafe class ScalarRasterizer : Rasterizer
         Vector128<float> tC = Sse.Shuffle(_Tmp2, _Tmp3, 0x88);
         Vector128<float> tD = Sse.Shuffle(_Tmp2, _Tmp3, 0xDD);
 
-        Sse.StoreAligned((float*)(@out + outOffset + 0), tA);
-        Sse.StoreAligned((float*)(@out + outOffset + 2), tB);
-        Sse.StoreAligned((float*)(@out + outOffset + 4), tC);
-        Sse.StoreAligned((float*)(@out + outOffset + 6), tD);
+        Unsafe.Write((float*)(@out + outOffset + 0), tA);
+        Unsafe.Write((float*)(@out + outOffset + 2), tB);
+        Unsafe.Write((float*)(@out + outOffset + 4), tC);
+        Unsafe.Write((float*)(@out + outOffset + 6), tD);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -455,7 +469,7 @@ public unsafe class ScalarRasterizer : Rasterizer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void normalizeEdge<T>(ref Vector4 nx, ref Vector4 ny, Vector4 edgeFlipMask)
+    private static void normalizeEdge<T>(ref Vector4 nx, ref Vector4 ny, Vector4I edgeFlipMask)
         where T : IPossiblyNearClipped
     {
         Vector4 invLen = Reciprocal(NotZeroAnd(nx) + NotZeroAnd(ny));
@@ -464,18 +478,18 @@ public unsafe class ScalarRasterizer : Rasterizer
         Vector4 mul = new((OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
         if (T.PossiblyNearClipped)
         {
-            mul = Xor(mul, edgeFlipMask);
+            mul = (mul.AsInt32() ^ edgeFlipMask).AsSingle();
         }
 
         invLen = (mul * invLen);
-        nx = (nx * invLen);
-        ny = (ny * invLen);
+        nx *= invLen;
+        ny *= invLen;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector4I quantizeSlopeLookup(Vector4 nx, Vector4 ny)
     {
-        Vector4I yNeg = CompareLessThanOrEqual(ny, Vector4.Zero).AsInt32();
+        Vector4I yNeg = CompareLessThanOrEqual(ny, Vector4.Zero);
 
         // Remap [-1, 1] to [0, SLOPE_QUANTIZATION / 2]
         const float maxOffset = -minEdgeOffset;
@@ -525,30 +539,30 @@ public unsafe class ScalarRasterizer : Rasterizer
               ((mat2 * Permute(boundsMin, 0b10_10_10_10)) +
                 mat3)));
 
-        mat0 = (mat0 * (new Vector4(boundsExtents.X) * (1.0f / (2047ul << 21))));
-        mat1 = (mat1 * (Permute(boundsExtents, 0b01_01_01_01) * (1.0f / (2047 << 10))));
-        mat2 = (mat2 * (Permute(boundsExtents, 0b10_10_10_10) * (1.0f / 1023)));
+        mat0 *= (new Vector4(boundsExtents.X) * (1.0f / (2047ul << 21)));
+        mat1 *= (Permute(boundsExtents, 0b01_01_01_01) * (1.0f / (2047 << 10)));
+        mat2 *= (Permute(boundsExtents, 0b10_10_10_10) * (1.0f / 1023));
 
         // Bias X coordinate back into positive range
         mat3 = ((mat0 * ((float)(1024ul << 21))) + mat3);
 
         // Skew projection to correct bleeding of Y and Z into X due to lack of masking
-        mat1 = (mat1 - mat0);
-        mat2 = (mat2 - mat0);
+        mat1 -= mat0;
+        mat2 -= mat0;
 
         _MM_TRANSPOSE4_PS(ref mat0, ref mat1, ref mat2, ref mat3);
 
         // Due to linear relationship between Z and W, it's cheaper to compute Z from W later in the pipeline than using the full projection matrix up front
         float c0, c1;
         {
-            Vector4 Za = Permute(mat2, 0b11_11_11_11);
-            Vector4 Zb = DotProduct(mat2, new Vector4((float)(1 << 21), 1 << 10, 1, 1), 0xFF);
-
-            Vector4 Wa = Permute(mat3, 0b11_11_11_11);
-            Vector4 Wb = DotProduct(mat3, new Vector4((float)(1 << 21), 1 << 10, 1, 1), 0xFF);
-
-            c0 = ((Za - Zb) / (Wa - Wb)).X;
-            c1 = (-(((Za - Zb) / (Wa - Wb)) * Wa) + Za).X;
+            float Za = mat2.W;
+            float Zb = Vector4.Dot(mat2, new Vector4(1 << 21, 1 << 10, 1, 1));
+            
+            float Wa = mat3.W;
+            float Wb = Vector4.Dot(mat3, new Vector4(1 << 21, 1 << 10, 1, 1));
+            
+            c0 = ((Za - Zb) / (Wa - Wb));
+            c1 = (-(((Za - Zb) / (Wa - Wb)) * Wa) + Za);
         }
 
         const int alignment = 256 / 8;
@@ -699,50 +713,54 @@ public unsafe class ScalarRasterizer : Rasterizer
                 Vector4 area3 = ((area0 + area2) - area1);
 
                 Vector4 minusZero128 = new(-0.0f);
+                Vector4I minusZero128i = minusZero128.AsInt32();
 
-                Vector4 wSign0, wSign1, wSign2, wSign3;
+                Vector4I wSign0, wSign1, wSign2, wSign3;
                 if (T.PossiblyNearClipped)
                 {
-                    wSign0 = And(invW0, minusZero128);
-                    wSign1 = And(invW1, minusZero128);
-                    wSign2 = And(invW2, minusZero128);
-                    wSign3 = And(invW3, minusZero128);
+                    wSign0 = (invW0.AsInt32() & minusZero128i);
+                    wSign1 = (invW1.AsInt32() & minusZero128i);
+                    wSign2 = (invW2.AsInt32() & minusZero128i);
+                    wSign3 = (invW3.AsInt32() & minusZero128i);
                 }
                 else
                 {
-                    wSign0 = Vector4.Zero;
-                    wSign1 = Vector4.Zero;
-                    wSign2 = Vector4.Zero;
-                    wSign3 = Vector4.Zero;
+                    wSign0 = Vector4I.Zero;
+                    wSign1 = Vector4I.Zero;
+                    wSign2 = Vector4I.Zero;
+                    wSign3 = Vector4I.Zero;
                 }
 
                 // Compute signs of areas. We treat 0 as negative as this allows treating primitives with zero area as backfacing.
-                Vector4 areaSign0, areaSign1, areaSign2, areaSign3;
+                Vector4I areaSign0, areaSign1, areaSign2, areaSign3;
                 if (T.PossiblyNearClipped)
                 {
+                    Vector4 sign0 = wSign0.AsSingle();
+                    Vector4 sign1 = wSign1.AsSingle();
+                    
                     // Flip areas for each vertex with W < 0. This needs to be done before comparison against 0 rather than afterwards to make sure zero-are triangles are handled correctly.
-                    areaSign0 = CompareLessThanOrEqual(Xor(Xor(area0, wSign0), Xor(wSign1, wSign2)), Vector4.Zero);
-                    areaSign1 = And(minusZero128, CompareLessThanOrEqual(Xor(Xor(area1, wSign1), Xor(wSign2, wSign3)), Vector4.Zero));
-                    areaSign2 = And(minusZero128, CompareLessThanOrEqual(Xor(Xor(area2, wSign0), Xor(wSign2, wSign3)), Vector4.Zero));
-                    areaSign3 = And(minusZero128, CompareLessThanOrEqual(Xor(Xor(area3, wSign1), Xor(wSign0, wSign3)), Vector4.Zero));
+                    areaSign0 = CompareLessThanOrEqual(Xor(Xor(area0, sign0), (wSign1 ^ wSign2).AsSingle()), Vector4.Zero);
+                    areaSign1 = (minusZero128i & CompareLessThanOrEqual(Xor(Xor(area1, sign1), (wSign2 ^ wSign3).AsSingle()), Vector4.Zero));
+                    areaSign2 = (minusZero128i & CompareLessThanOrEqual(Xor(Xor(area2, sign0), (wSign2 ^ wSign3).AsSingle()), Vector4.Zero));
+                    areaSign3 = (minusZero128i & CompareLessThanOrEqual(Xor(Xor(area3, sign1), (wSign0 ^ wSign3).AsSingle()), Vector4.Zero));
                 }
                 else
                 {
                     areaSign0 = CompareLessThanOrEqual(area0, Vector4.Zero);
-                    areaSign1 = And(minusZero128, CompareLessThanOrEqual(area1, Vector4.Zero));
-                    areaSign2 = And(minusZero128, CompareLessThanOrEqual(area2, Vector4.Zero));
-                    areaSign3 = And(minusZero128, CompareLessThanOrEqual(area3, Vector4.Zero));
+                    areaSign1 = (minusZero128i & CompareLessThanOrEqual(area1, Vector4.Zero));
+                    areaSign2 = (minusZero128i & CompareLessThanOrEqual(area2, Vector4.Zero));
+                    areaSign3 = (minusZero128i & CompareLessThanOrEqual(area3, Vector4.Zero));
                 }
 
                 Vector4I config = (
-                    ((areaSign3.AsInt32() >>> 28) | (areaSign2.AsInt32() >>> 29)) |
-                    ((areaSign1.AsInt32() >>> 30) | (areaSign0.AsInt32() >>> 31)));
+                    ((areaSign3 >>> 28) | (areaSign2 >>> 29)) |
+                    ((areaSign1 >>> 30) | (areaSign0 >>> 31)));
 
                 if (T.PossiblyNearClipped)
                 {
-                    config = (config | (
-                        ((wSign3.AsInt32() >>> 24) | (wSign2.AsInt32() >>> 25)) |
-                        ((wSign1.AsInt32() >>> 26) | (wSign0.AsInt32() >>> 27))));
+                    config |= (
+                        ((wSign3 >>> 24) | (wSign2 >>> 25)) |
+                        ((wSign1 >>> 26) | (wSign0 >>> 27)));
                 }
 
                 Vector4I modes;
@@ -755,7 +773,7 @@ public unsafe class ScalarRasterizer : Rasterizer
                         (int)modeTablePtr[config.W]);
                 }
 
-                if (Vector4I.TestZ(modes, modes))
+                if (Vector4I.TestZ(modes))
                 {
                     return 1;
                 }
@@ -791,19 +809,19 @@ public unsafe class ScalarRasterizer : Rasterizer
                       Vector4.Min(minPy0, minPy1),
                       Vector4.Min(minPy2, minPy3));
 
-                    Vector4 maxPx0 = Xor(minPx0, wSign0);
-                    Vector4 maxPx1 = Xor(minPx1, wSign1);
-                    Vector4 maxPx2 = Xor(minPx2, wSign2);
-                    Vector4 maxPx3 = Xor(minPx3, wSign3);
+                    Vector4 maxPx0 = (minPx0.AsInt32() ^ wSign0).AsSingle();
+                    Vector4 maxPx1 = (minPx1.AsInt32() ^ wSign1).AsSingle();
+                    Vector4 maxPx2 = (minPx2.AsInt32() ^ wSign2).AsSingle();
+                    Vector4 maxPx3 = (minPx3.AsInt32() ^ wSign3).AsSingle();
 
                     Vector4 maxPx = Vector4.Max(
                       Vector4.Max(maxPx0, maxPx1),
                       Vector4.Max(maxPx2, maxPx3));
 
-                    Vector4 maxPy0 = Xor(minPy0, wSign0);
-                    Vector4 maxPy1 = Xor(minPy1, wSign1);
-                    Vector4 maxPy2 = Xor(minPy2, wSign2);
-                    Vector4 maxPy3 = Xor(minPy3, wSign3);
+                    Vector4 maxPy0 = (minPy0.AsInt32() ^ wSign0).AsSingle();
+                    Vector4 maxPy1 = (minPy1.AsInt32() ^ wSign1).AsSingle();
+                    Vector4 maxPy2 = (minPy2.AsInt32() ^ wSign2).AsSingle();
+                    Vector4 maxPy3 = (minPy3.AsInt32() ^ wSign3).AsSingle();
 
                     Vector4 maxPy = Vector4.Max(
                       Vector4.Max(maxPy0, maxPy1),
@@ -875,17 +893,17 @@ public unsafe class ScalarRasterizer : Rasterizer
                 minY = Vector4I.Max(Vector4I.ConvertWithTruncation((minFy + new Vector4(4.9999f / 8.0f))), Vector4I.Zero);
                 maxX = Vector4I.Min(Vector4I.ConvertWithTruncation((maxFx + new Vector4(11.0f / 8.0f))), new Vector4I((int)m_blocksX));
                 maxY = Vector4I.Min(Vector4I.ConvertWithTruncation((maxFy + new Vector4(11.0f / 8.0f))), new Vector4I((int)m_blocksY));
-
+                
                 // Check overlap between bounding box and frustum
                 Vector4I inFrustum = ((maxX > minX) & (maxY > minY));
                 Vector4I overlappedPrimitiveValid = (inFrustum & primitiveValid);
 
-                if (Vector4I.TestZ(overlappedPrimitiveValid, overlappedPrimitiveValid))
+                if (Vector4I.TestZ(overlappedPrimitiveValid))
                 {
                     return 2;
                 }
 
-                validMask |= (uint)MoveMask(overlappedPrimitiveValid.AsSingle()) << (4 * partIndex);
+                validMask |= MoveMask(overlappedPrimitiveValid.AsSingle()) << (4 * partIndex);
 
                 // Convert bounds from [min, max] to [min, range]
                 Vector4I rangeX = (maxX - minX);
@@ -905,7 +923,7 @@ public unsafe class ScalarRasterizer : Rasterizer
                 // If any W < 0, assume maxZ = 1 (effectively disabling Hi-Z)
                 if (T.PossiblyNearClipped)
                 {
-                    maxZ = BlendVariable(maxZ, new Vector4(1.0f), Or(Or(wSign0, wSign1), Or(wSign2, wSign3)));
+                    maxZ = BlendVariable(maxZ, new Vector4(1.0f), ((wSign0 | wSign1) | (wSign2 | wSign3)));
                 }
 
                 Vector128<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
@@ -913,12 +931,12 @@ public unsafe class ScalarRasterizer : Rasterizer
                 Sse2.Store(depthBounds + 4 * partIndex, packedDepthBounds);
 
                 // Compute screen space depth plane
-                Vector4 greaterArea = CompareLessThan(NotZeroAnd(area0), NotZeroAnd(area2));
+                Vector4I greaterArea = CompareLessThan(NotZeroAnd(area0), NotZeroAnd(area2));
 
                 // Force triangle area to be picked in the relevant mode.
-                Vector4 modeTriangle0 = (modes == new Vector4I((int)PrimitiveMode.Triangle0)).AsSingle();
-                Vector4 modeTriangle1 = (modes == new Vector4I((int)PrimitiveMode.Triangle1)).AsSingle();
-                greaterArea = AndNot(modeTriangle0, Or(modeTriangle1, greaterArea));
+                Vector4I modeTriangle0 = (modes == new Vector4I((int)PrimitiveMode.Triangle0));
+                Vector4I modeTriangle1 = (modes == new Vector4I((int)PrimitiveMode.Triangle1));
+                greaterArea = (~modeTriangle0) & (modeTriangle1 | greaterArea);
 
                 Vector4 invArea;
                 if (T.PossiblyNearClipped)
@@ -943,8 +961,8 @@ public unsafe class ScalarRasterizer : Rasterizer
                 depthPlane1 = (invArea * BlendVariable(((z20 * edgeNormalsX1) - (z12 * edgeNormalsX4)), (-(z20 * edgeNormalsX3) + (z30 * edgeNormalsX4)), greaterArea));
                 depthPlane2 = (invArea * BlendVariable(((z20 * edgeNormalsY1) - (z12 * edgeNormalsY4)), (-(z20 * edgeNormalsY3) + (z30 * edgeNormalsY4)), greaterArea));
 
-                x0 = (x0 - minX.ToSingle());
-                y0 = (y0 - minY.ToSingle());
+                x0 -= minX.ToSingle();
+                y0 -= minY.ToSingle();
 
                 depthPlane0 = (-(x0 * depthPlane1) + (-(y0 * depthPlane2) + z0));
 
@@ -955,20 +973,20 @@ public unsafe class ScalarRasterizer : Rasterizer
                 edgeNormalsY0 = BlendVariable(edgeNormalsY0, Xor(minusZero128, edgeNormalsY4), modeTriangle1);
 
                 // Flip edges if W < 0
-                Vector4 edgeFlipMask0, edgeFlipMask1, edgeFlipMask2, edgeFlipMask3;
+                Vector4I edgeFlipMask0, edgeFlipMask1, edgeFlipMask2, edgeFlipMask3;
                 if (T.PossiblyNearClipped)
                 {
-                    edgeFlipMask0 = Xor(wSign0, BlendVariable(wSign1, wSign2, modeTriangle1));
-                    edgeFlipMask1 = Xor(wSign1, wSign2);
-                    edgeFlipMask2 = Xor(wSign2, BlendVariable(wSign3, wSign0, modeTriangle0));
-                    edgeFlipMask3 = Xor(wSign0, wSign3);
+                    edgeFlipMask0 = (wSign0 ^ BlendVariable(wSign1, wSign2, modeTriangle1));
+                    edgeFlipMask1 = (wSign1 ^ wSign2);
+                    edgeFlipMask2 = (wSign2 ^ BlendVariable(wSign3, wSign0, modeTriangle0));
+                    edgeFlipMask3 = (wSign0 ^ wSign3);
                 }
                 else
                 {
-                    edgeFlipMask0 = Vector4.Zero;
-                    edgeFlipMask1 = Vector4.Zero;
-                    edgeFlipMask2 = Vector4.Zero;
-                    edgeFlipMask3 = Vector4.Zero;
+                    edgeFlipMask0 = Vector4I.Zero;
+                    edgeFlipMask1 = Vector4I.Zero;
+                    edgeFlipMask2 = Vector4I.Zero;
+                    edgeFlipMask3 = Vector4I.Zero;
                 }
 
                 // Normalize edge equations for lookup
@@ -1120,9 +1138,9 @@ public unsafe class ScalarRasterizer : Rasterizer
               ++blockY,
               pPrimitiveHiZ += blocksX,
               pPrimitiveOut += 8 * blocksX,
-              lineDepthA = (lineDepthA + depthDy),
-              lineDepthB = (lineDepthB + depthDy),
-              lineOffset = (lineOffset + edgeNormalY))
+              lineDepthA += depthDy,
+              lineDepthB += depthDy,
+              lineOffset += edgeNormalY)
             {
                 ushort* pBlockRowHiZ = pPrimitiveHiZ;
                 Vector4I* @out = pPrimitiveOut;
@@ -1151,8 +1169,8 @@ public unsafe class ScalarRasterizer : Rasterizer
                     if (primitiveMode == (uint)PrimitiveMode.Convex)    // 83-97%
                     {
                         // Simplified conservative test: combined block mask will be zero if any offset is outside of range
-                        Vector4 anyOffsetOutsideMask = CompareGreaterThanOrEqual(offset, new Vector4((float)(OFFSET_QUANTIZATION_FACTOR - 1)));
-                        if (!TestZ(anyOffsetOutsideMask, anyOffsetOutsideMask))
+                        Vector4I anyOffsetOutsideMask = CompareGreaterThanOrEqual(offset, new Vector4(OFFSET_QUANTIZATION_FACTOR - 1));
+                        if (!Vector4I.TestZ(anyOffsetOutsideMask))
                         {
                             if (anyBlockHit)
                             {
@@ -1314,20 +1332,5 @@ public unsafe class ScalarRasterizer : Rasterizer
                 }
             }
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool TestZ(Vector4 a, Vector4 b)
-    {
-        Vector4 mask = new Vector4I(unchecked((int)0x80000000u)).AsSingle();
-        return Vector4I.TestZ(
-            And(a, mask).AsInt32(),
-            And(b, mask).AsInt32());
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector4 Permute(Vector4 a, byte imm8)
-    {
-        return Sse.Shuffle(a.AsVector128(), a.AsVector128(), imm8).AsVector4();
     }
 }
