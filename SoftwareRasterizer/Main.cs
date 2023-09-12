@@ -82,7 +82,7 @@ public static unsafe class Main
             new ReadOnlySpan<Vector4>(vertices, (int)vertexCount));
 
         g_rasterizationTable = new RasterizationTable();
-        g_rasterizer = Avx2Rasterizer<FmaX86>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+        g_rasterizer = RasterizerV256<FmaX86>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
 
         // Pad to a multiple of 8 quads
         while (indexList.Count % 32 != 0)
@@ -326,6 +326,10 @@ public static unsafe class Main
                     else if (previousRasterizer is Sse41Rasterizer<FmaIntrinsic>)
                     {
                         g_rasterizer = ScalarRasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
+                    }
+                    else if (previousRasterizer is ScalarRasterizer)
+                    {
+                        g_rasterizer = RasterizerV256<FmaX86>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
                     }
                     else
                     {
