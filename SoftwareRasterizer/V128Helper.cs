@@ -96,6 +96,12 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> PermuteFrom0(Vector128<float> value)
+    {
+        return Vector128.Create(value.ToScalar());
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> PermuteFrom1(Vector128<float> value)
     {
         return Vector128.Shuffle(value, Vector128.Create(1));
