@@ -778,19 +778,19 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<float> infN = V128.Create(-10000.0f);
 
                     // Find interval of points with W > 0
-                    Vector128<float> minPx0 = Sse41.BlendVariable(x0, infP, wSign0);
-                    Vector128<float> minPx1 = Sse41.BlendVariable(x1, infP, wSign1);
-                    Vector128<float> minPx2 = Sse41.BlendVariable(x2, infP, wSign2);
-                    Vector128<float> minPx3 = Sse41.BlendVariable(x3, infP, wSign3);
+                    Vector128<float> minPx0 = V128Helper.BlendVariable(x0, infP, wSign0);
+                    Vector128<float> minPx1 = V128Helper.BlendVariable(x1, infP, wSign1);
+                    Vector128<float> minPx2 = V128Helper.BlendVariable(x2, infP, wSign2);
+                    Vector128<float> minPx3 = V128Helper.BlendVariable(x3, infP, wSign3);
 
                     Vector128<float> minPx = V128.Min(
                       V128.Min(minPx0, minPx1),
                       V128.Min(minPx2, minPx3));
 
-                    Vector128<float> minPy0 = Sse41.BlendVariable(y0, infP, wSign0);
-                    Vector128<float> minPy1 = Sse41.BlendVariable(y1, infP, wSign1);
-                    Vector128<float> minPy2 = Sse41.BlendVariable(y2, infP, wSign2);
-                    Vector128<float> minPy3 = Sse41.BlendVariable(y3, infP, wSign3);
+                    Vector128<float> minPy0 = V128Helper.BlendVariable(y0, infP, wSign0);
+                    Vector128<float> minPy1 = V128Helper.BlendVariable(y1, infP, wSign1);
+                    Vector128<float> minPy2 = V128Helper.BlendVariable(y2, infP, wSign2);
+                    Vector128<float> minPy3 = V128Helper.BlendVariable(y3, infP, wSign3);
 
                     Vector128<float> minPy = V128.Min(
                       V128.Min(minPy0, minPy1),
@@ -815,48 +815,48 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                       V128.Max(maxPy2, maxPy3));
 
                     // Find interval of points with W < 0
-                    Vector128<float> minNx0 = Sse41.BlendVariable(infP, x0, wSign0);
-                    Vector128<float> minNx1 = Sse41.BlendVariable(infP, x1, wSign1);
-                    Vector128<float> minNx2 = Sse41.BlendVariable(infP, x2, wSign2);
-                    Vector128<float> minNx3 = Sse41.BlendVariable(infP, x3, wSign3);
+                    Vector128<float> minNx0 = V128Helper.BlendVariable(infP, x0, wSign0);
+                    Vector128<float> minNx1 = V128Helper.BlendVariable(infP, x1, wSign1);
+                    Vector128<float> minNx2 = V128Helper.BlendVariable(infP, x2, wSign2);
+                    Vector128<float> minNx3 = V128Helper.BlendVariable(infP, x3, wSign3);
 
                     Vector128<float> minNx = V128.Min(
                       V128.Min(minNx0, minNx1),
                       V128.Min(minNx2, minNx3));
 
-                    Vector128<float> minNy0 = Sse41.BlendVariable(infP, y0, wSign0);
-                    Vector128<float> minNy1 = Sse41.BlendVariable(infP, y1, wSign1);
-                    Vector128<float> minNy2 = Sse41.BlendVariable(infP, y2, wSign2);
-                    Vector128<float> minNy3 = Sse41.BlendVariable(infP, y3, wSign3);
+                    Vector128<float> minNy0 = V128Helper.BlendVariable(infP, y0, wSign0);
+                    Vector128<float> minNy1 = V128Helper.BlendVariable(infP, y1, wSign1);
+                    Vector128<float> minNy2 = V128Helper.BlendVariable(infP, y2, wSign2);
+                    Vector128<float> minNy3 = V128Helper.BlendVariable(infP, y3, wSign3);
 
                     Vector128<float> minNy = V128.Min(
                       V128.Min(minNy0, minNy1),
                       V128.Min(minNy2, minNy3));
 
-                    Vector128<float> maxNx0 = Sse41.BlendVariable(infN, x0, wSign0);
-                    Vector128<float> maxNx1 = Sse41.BlendVariable(infN, x1, wSign1);
-                    Vector128<float> maxNx2 = Sse41.BlendVariable(infN, x2, wSign2);
-                    Vector128<float> maxNx3 = Sse41.BlendVariable(infN, x3, wSign3);
+                    Vector128<float> maxNx0 = V128Helper.BlendVariable(infN, x0, wSign0);
+                    Vector128<float> maxNx1 = V128Helper.BlendVariable(infN, x1, wSign1);
+                    Vector128<float> maxNx2 = V128Helper.BlendVariable(infN, x2, wSign2);
+                    Vector128<float> maxNx3 = V128Helper.BlendVariable(infN, x3, wSign3);
 
                     Vector128<float> maxNx = V128.Max(
                       V128.Max(maxNx0, maxNx1),
                       V128.Max(maxNx2, maxNx3));
 
-                    Vector128<float> maxNy0 = Sse41.BlendVariable(infN, y0, wSign0);
-                    Vector128<float> maxNy1 = Sse41.BlendVariable(infN, y1, wSign1);
-                    Vector128<float> maxNy2 = Sse41.BlendVariable(infN, y2, wSign2);
-                    Vector128<float> maxNy3 = Sse41.BlendVariable(infN, y3, wSign3);
+                    Vector128<float> maxNy0 = V128Helper.BlendVariable(infN, y0, wSign0);
+                    Vector128<float> maxNy1 = V128Helper.BlendVariable(infN, y1, wSign1);
+                    Vector128<float> maxNy2 = V128Helper.BlendVariable(infN, y2, wSign2);
+                    Vector128<float> maxNy3 = V128Helper.BlendVariable(infN, y3, wSign3);
 
                     Vector128<float> maxNy = V128.Max(
                       V128.Max(maxNy0, maxNy1),
                       V128.Max(maxNy2, maxNy3));
 
                     // Include interval bounds resp. infinity depending on ordering of intervals
-                    Vector128<float> incAx = Sse41.BlendVariable(minPx, infN, V128.GreaterThan(maxNx, minPx));
-                    Vector128<float> incAy = Sse41.BlendVariable(minPy, infN, V128.GreaterThan(maxNy, minPy));
-                                             
-                    Vector128<float> incBx = Sse41.BlendVariable(maxPx, infP, V128.GreaterThan(maxPx, minNx));
-                    Vector128<float> incBy = Sse41.BlendVariable(maxPy, infP, V128.GreaterThan(maxPy, minNy));
+                    Vector128<float> incAx = V128Helper.BlendVariable(minPx, infN, V128.GreaterThan(maxNx, minPx));
+                    Vector128<float> incAy = V128Helper.BlendVariable(minPy, infN, V128.GreaterThan(maxNy, minPy));
+
+                    Vector128<float> incBx = V128Helper.BlendVariable(maxPx, infP, V128.GreaterThan(maxPx, minNx));
+                    Vector128<float> incBy = V128Helper.BlendVariable(maxPy, infP, V128.GreaterThan(maxPy, minNy));
 
                     minFx = V128.Min(incAx, incBx);
                     minFy = V128.Min(incAy, incBy);
@@ -910,7 +910,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 // If any W < 0, assume maxZ = 1 (effectively disabling Hi-Z)
                 if (T.PossiblyNearClipped)
                 {
-                    maxZ = Sse41.BlendVariable(maxZ, V128.Create(1.0f), V128.BitwiseOr(V128.BitwiseOr(wSign0, wSign1), V128.BitwiseOr(wSign2, wSign3)));
+                    maxZ = V128Helper.BlendVariable(maxZ, V128.Create(1.0f), V128.BitwiseOr(V128.BitwiseOr(wSign0, wSign1), V128.BitwiseOr(wSign2, wSign3)));
                 }
 
                 Vector128<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
@@ -930,11 +930,11 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 {
                     // Do a precise divison to reduce error in depth plane. Note that the area computed here
                     // differs from the rasterized region if W < 0, so it can be very small for large covered screen regions.
-                    invArea = V128.Divide(V128.Create(1.0f), Sse41.BlendVariable(area0, area2, greaterArea));
+                    invArea = V128.Divide(V128.Create(1.0f), V128Helper.BlendVariable(area0, area2, greaterArea));
                 }
                 else
                 {
-                    invArea = V128Helper.Reciprocal(Sse41.BlendVariable(area0, area2, greaterArea));
+                    invArea = V128Helper.Reciprocal(V128Helper.BlendVariable(area0, area2, greaterArea));
                 }
 
                 Vector128<float> z12 = V128.Subtract(z1, z2);
@@ -945,8 +945,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 Vector128<float> edgeNormalsY4 = V128.Subtract(x2, x0);
 
                 Vector128<float> depthPlane0, depthPlane1, depthPlane2;
-                depthPlane1 = V128.Multiply(invArea, Sse41.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, V128.Multiply(z12, edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, V128.Multiply(z30, edgeNormalsX4)), greaterArea));
-                depthPlane2 = V128.Multiply(invArea, Sse41.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, V128.Multiply(z12, edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, V128.Multiply(z30, edgeNormalsY4)), greaterArea));
+                depthPlane1 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, V128.Multiply(z12, edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, V128.Multiply(z30, edgeNormalsX4)), greaterArea));
+                depthPlane2 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, V128.Multiply(z12, edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, V128.Multiply(z30, edgeNormalsY4)), greaterArea));
 
                 x0 = V128.Subtract(x0, Sse2.ConvertToVector128Single(minX));
                 y0 = V128.Subtract(y0, Sse2.ConvertToVector128Single(minY));
@@ -954,10 +954,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 depthPlane0 = Fma.MultiplyAddNegated(x0, depthPlane1, Fma.MultiplyAddNegated(y0, depthPlane2, z0));
 
                 // If mode == Triangle0, replace edge 2 with edge 4; if mode == Triangle1, replace edge 0 with edge 4
-                edgeNormalsX2 = Sse41.BlendVariable(edgeNormalsX2, edgeNormalsX4, modeTriangle0);
-                edgeNormalsY2 = Sse41.BlendVariable(edgeNormalsY2, edgeNormalsY4, modeTriangle0);
-                edgeNormalsX0 = Sse41.BlendVariable(edgeNormalsX0, V128.Xor(minusZero128, edgeNormalsX4), modeTriangle1);
-                edgeNormalsY0 = Sse41.BlendVariable(edgeNormalsY0, V128.Xor(minusZero128, edgeNormalsY4), modeTriangle1);
+                edgeNormalsX2 = V128Helper.BlendVariable(edgeNormalsX2, edgeNormalsX4, modeTriangle0);
+                edgeNormalsY2 = V128Helper.BlendVariable(edgeNormalsY2, edgeNormalsY4, modeTriangle0);
+                edgeNormalsX0 = V128Helper.BlendVariable(edgeNormalsX0, V128.Xor(minusZero128, edgeNormalsX4), modeTriangle1);
+                edgeNormalsY0 = V128Helper.BlendVariable(edgeNormalsY0, V128.Xor(minusZero128, edgeNormalsY4), modeTriangle1);
 
                 const float maxOffset = -minEdgeOffset;
                 Vector128<float> edgeFactor = V128.Create((OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
@@ -966,9 +966,9 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 Vector128<float> edgeFlipMask0, edgeFlipMask1, edgeFlipMask2, edgeFlipMask3;
                 if (T.PossiblyNearClipped)
                 {
-                    edgeFlipMask0 = V128.Xor(edgeFactor, V128.Xor(wSign0, Sse41.BlendVariable(wSign1, wSign2, modeTriangle1)));
+                    edgeFlipMask0 = V128.Xor(edgeFactor, V128.Xor(wSign0, V128Helper.BlendVariable(wSign1, wSign2, modeTriangle1)));
                     edgeFlipMask1 = V128.Xor(edgeFactor, V128.Xor(wSign1, wSign2));
-                    edgeFlipMask2 = V128.Xor(edgeFactor, V128.Xor(wSign2, Sse41.BlendVariable(wSign3, wSign0, modeTriangle0)));
+                    edgeFlipMask2 = V128.Xor(edgeFactor, V128.Xor(wSign2, V128Helper.BlendVariable(wSign3, wSign0, modeTriangle0)));
                     edgeFlipMask3 = V128.Xor(edgeFactor, V128.Xor(wSign0, wSign3));
                 }
                 else
@@ -1277,15 +1277,15 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                         Vector128<short> rowMask_A = Sse2.UnpackLow(C_A, C_A).AsInt16();
                         Vector128<short> rowMask_B = Sse2.UnpackLow(C_B, C_B).AsInt16();
 
-                        d0_A = Sse41.BlendVariable(Vector128<byte>.Zero, d0_A.AsByte(), V128.ShiftLeft(rowMask_A, 3).AsByte()).AsUInt16();
-                        d1_A = Sse41.BlendVariable(Vector128<byte>.Zero, d1_A.AsByte(), V128.ShiftLeft(rowMask_A, 2).AsByte()).AsUInt16();
-                        d2_A = Sse41.BlendVariable(Vector128<byte>.Zero, d2_A.AsByte(), V128.Add(rowMask_A, rowMask_A).AsByte()).AsUInt16();
-                        d3_A = Sse41.BlendVariable(Vector128<byte>.Zero, d3_A.AsByte(), rowMask_A.AsByte()).AsUInt16();
-                               
-                        d0_B = Sse41.BlendVariable(Vector128<byte>.Zero, d0_B.AsByte(), V128.ShiftLeft(rowMask_B, 3).AsByte()).AsUInt16();
-                        d1_B = Sse41.BlendVariable(Vector128<byte>.Zero, d1_B.AsByte(), V128.ShiftLeft(rowMask_B, 2).AsByte()).AsUInt16();
-                        d2_B = Sse41.BlendVariable(Vector128<byte>.Zero, d2_B.AsByte(), V128.Add(rowMask_B, rowMask_B).AsByte()).AsUInt16();
-                        d3_B = Sse41.BlendVariable(Vector128<byte>.Zero, d3_B.AsByte(), rowMask_B.AsByte()).AsUInt16();
+                        d0_A = V128Helper.BlendVariable(Vector128<byte>.Zero, d0_A.AsByte(), V128.ShiftLeft(rowMask_A, 3).AsByte()).AsUInt16();
+                        d1_A = V128Helper.BlendVariable(Vector128<byte>.Zero, d1_A.AsByte(), V128.ShiftLeft(rowMask_A, 2).AsByte()).AsUInt16();
+                        d2_A = V128Helper.BlendVariable(Vector128<byte>.Zero, d2_A.AsByte(), V128.Add(rowMask_A, rowMask_A).AsByte()).AsUInt16();
+                        d3_A = V128Helper.BlendVariable(Vector128<byte>.Zero, d3_A.AsByte(), rowMask_A.AsByte()).AsUInt16();
+
+                        d0_B = V128Helper.BlendVariable(Vector128<byte>.Zero, d0_B.AsByte(), V128.ShiftLeft(rowMask_B, 3).AsByte()).AsUInt16();
+                        d1_B = V128Helper.BlendVariable(Vector128<byte>.Zero, d1_B.AsByte(), V128.ShiftLeft(rowMask_B, 2).AsByte()).AsUInt16();
+                        d2_B = V128Helper.BlendVariable(Vector128<byte>.Zero, d2_B.AsByte(), V128.Add(rowMask_B, rowMask_B).AsByte()).AsUInt16();
+                        d3_B = V128Helper.BlendVariable(Vector128<byte>.Zero, d3_B.AsByte(), rowMask_B.AsByte()).AsUInt16();
                     }
 
                     // Test fast clear flag

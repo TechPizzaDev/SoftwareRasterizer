@@ -30,6 +30,34 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> BlendVariable(Vector128<float> left, Vector128<float> right, Vector128<float> mask)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.BlendVariable(left, right, mask);
+        }
+        else
+        {
+            Vector128<float> c = Vector128.ShiftRightArithmetic(mask.AsInt32(), 31).AsSingle();
+            return Vector128.ConditionalSelect(c, right, left);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<byte> BlendVariable(Vector128<byte> left, Vector128<byte> right, Vector128<byte> mask)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.BlendVariable(left, right, mask);
+        }
+        else
+        {
+            Vector128<byte> c = Vector128.ShiftRightArithmetic(mask.AsSByte(), 7).AsByte();
+            return Vector128.ConditionalSelect(c, right, left);
+        }
+    } 
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> DotProduct_x7F(Vector128<float> a, Vector128<float> b)
     {
         if (Sse41.IsSupported)
