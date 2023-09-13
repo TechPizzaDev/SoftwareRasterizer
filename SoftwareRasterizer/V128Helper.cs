@@ -235,6 +235,20 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TestZ(Vector128<int> left, Vector128<int> right)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.TestZ(left, right);
+        }
+        else
+        {
+            Vector128<int> tmp = left & right;
+            return Vector128.EqualsAll(tmp, Vector128<int>.Zero);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> UnpackHigh(Vector128<float> left, Vector128<float> right)
     {
         if (Sse.IsSupported)

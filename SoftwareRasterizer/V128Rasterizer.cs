@@ -760,7 +760,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 }
 
                 Vector128<int> modes = V128.LoadAligned(modeTableBuffer);
-                if (Sse41.TestZ(modes, modes))
+                if (V128Helper.TestZ(modes, modes))
                 {
                     return 1;
                 }
@@ -885,7 +885,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 Vector128<int> inFrustum = V128.BitwiseAnd(V128.GreaterThan(maxX, minX), V128.GreaterThan(maxY, minY));
                 Vector128<int> overlappedPrimitiveValid = V128.BitwiseAnd(inFrustum, primitiveValid);
 
-                if (Sse41.TestZ(overlappedPrimitiveValid, overlappedPrimitiveValid))
+                if (V128Helper.TestZ(overlappedPrimitiveValid, overlappedPrimitiveValid))
                 {
                     return 2;
                 }
