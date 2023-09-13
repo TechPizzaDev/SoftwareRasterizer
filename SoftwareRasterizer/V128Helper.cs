@@ -273,6 +273,34 @@ public static class V128Helper
                 right.GetElement(3));
         }
     }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<byte> UnpackHigh(Vector128<byte> left, Vector128<byte> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackHigh(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipHigh(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<byte> SoftwareFallback(Vector128<byte> left, Vector128<byte> right)
+        {
+            Unsafe.SkipInit(out Vector128<byte> result);
+            for (int i = 0; i < 8; i++)
+            {
+                result = result.WithElement(i * 2 + 0, left.GetElement(i + 8));
+                result = result.WithElement(i * 2 + 1, right.GetElement(i + 8));
+            }
+            return result;
+        }
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> UnpackLow(Vector128<float> left, Vector128<float> right)
@@ -297,6 +325,34 @@ public static class V128Helper
                 right.GetElement(0),
                 left.GetElement(1),
                 right.GetElement(1));
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<byte> UnpackLow(Vector128<byte> left, Vector128<byte> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackLow(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipLow(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<byte> SoftwareFallback(Vector128<byte> left, Vector128<byte> right)
+        {
+            Unsafe.SkipInit(out Vector128<byte> result);
+            for (int i = 0; i < 8; i++)
+            {
+                result = result.WithElement(i * 2 + 0, left.GetElement(i));
+                result = result.WithElement(i * 2 + 1, right.GetElement(i));
+            }
+            return result;
         }
     }
 }

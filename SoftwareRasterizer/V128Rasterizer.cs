@@ -368,7 +368,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 }
 
                 Vector128<float> vRcp100 = V128.Create(1.0f / 100.0f);
-                Vector128<ushort> vZeroMax = Sse2.UnpackLow(Vector128<byte>.Zero, Vector128<byte>.AllBitsSet).AsUInt16();
+                Vector128<ushort> vZeroMax = V128Helper.UnpackLow(Vector128<byte>.Zero, Vector128<byte>.AllBitsSet).AsUInt16();
                 Vector128<ushort> vMask = V128.Create((ushort)0xff);
 
                 for (uint y = 0; y < 8; y += 2)
@@ -396,8 +396,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<ushort> vG16_1 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vG32_2, vG32_3), vMask);
                     Vector128<byte> vG8 = Sse2.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
 
-                    Vector128<ushort> vRG_Lo = Sse2.UnpackLow(vR8, vG8).AsUInt16();
-                    Vector128<ushort> vRG_Hi = Sse2.UnpackHigh(vR8, vG8).AsUInt16();
+                    Vector128<ushort> vRG_Lo = V128Helper.UnpackLow(vR8, vG8).AsUInt16();
+                    Vector128<ushort> vRG_Hi = V128Helper.UnpackHigh(vR8, vG8).AsUInt16();
 
                     Vector128<uint> result1 = Sse2.UnpackLow(vRG_Lo, vZeroMax).AsUInt32();
                     Vector128<uint> result2 = Sse2.UnpackHigh(vRG_Lo, vZeroMax).AsUInt32();
@@ -1274,8 +1274,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                         Vector128<byte> C_A = Sse41.Blend(A, B, 0b11_11_00_00).AsByte();
                         Vector128<byte> C_B = Sse41.Blend(A, B, 0b00_00_11_11).AsByte();
 
-                        Vector128<short> rowMask_A = Sse2.UnpackLow(C_A, C_A).AsInt16();
-                        Vector128<short> rowMask_B = Sse2.UnpackLow(C_B, C_B).AsInt16();
+                        Vector128<short> rowMask_A = V128Helper.UnpackLow(C_A, C_A).AsInt16();
+                        Vector128<short> rowMask_B = V128Helper.UnpackLow(C_B, C_B).AsInt16();
 
                         d0_A = V128Helper.BlendVariable(Vector128<byte>.Zero, d0_A.AsByte(), V128.ShiftLeft(rowMask_A, 3).AsByte()).AsUInt16();
                         d1_A = V128Helper.BlendVariable(Vector128<byte>.Zero, d1_A.AsByte(), V128.ShiftLeft(rowMask_A, 2).AsByte()).AsUInt16();
