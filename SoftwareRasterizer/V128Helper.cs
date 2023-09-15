@@ -58,6 +58,19 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<int> ConvertToInt32(Vector128<ushort> value)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.ConvertToVector128Int32(value);
+        }
+        else
+        {
+            return UnpackLow(value, Vector128<ushort>.Zero).AsInt32();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> DotProduct_x7F(Vector128<float> a, Vector128<float> b)
     {
         if (Sse41.IsSupported)

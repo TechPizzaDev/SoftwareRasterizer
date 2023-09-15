@@ -354,8 +354,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 {
                     Vector128<int> depthI = V128.LoadAligned((int*)source++);
 
-                    Vector128<int> depthILo = V128.ShiftLeft(Sse41.ConvertToVector128Int32(depthI.AsUInt16()), 12);
-                    Vector128<int> depthIHi = V128.ShiftLeft(Sse41.ConvertToVector128Int32(V128.Shuffle(depthI, V128.Create(2, 3, 0, 0)).AsUInt16()), 12);
+                    Vector128<int> depthILo = V128.ShiftLeft(V128Helper.ConvertToInt32(depthI.AsUInt16()), 12);
+                    Vector128<int> depthIHi = V128.ShiftLeft(V128Helper.ConvertToInt32(V128.Shuffle(depthI, V128.Create(2, 3, 0, 0)).AsUInt16()), 12);
 
                     Vector128<float> depthLo = V128.Multiply(depthILo.AsSingle(), vBias);
                     Vector128<float> depthHi = V128.Multiply(depthIHi.AsSingle(), vBias);
