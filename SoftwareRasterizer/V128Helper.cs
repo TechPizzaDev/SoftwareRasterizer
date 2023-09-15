@@ -115,6 +115,28 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<byte> PackUnsignedSaturate(Vector128<short> left, Vector128<short> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.PackUnsignedSaturate(left, right);
+        }
+        else if (AdvSimd.IsSupported)
+        {
+            return Vector128.Create(
+                AdvSimd.ExtractNarrowingSaturateUnsignedLower(left),
+                AdvSimd.ExtractNarrowingSaturateUnsignedLower(right));
+        }
+        else
+        {
+            Vector128<short> max = Vector128.Create((short)byte.MaxValue);
+            Vector128<short> satLeft = Vector128.Max(Vector128<short>.Zero, Vector128.Min(left, max));
+            Vector128<short> satRight = Vector128.Max(Vector128<short>.Zero, Vector128.Min(right, max));
+            return Vector128.Narrow(satLeft.AsUInt16(), satRight.AsUInt16());
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<ushort> PackUnsignedSaturate(Vector128<int> left, Vector128<int> right)
     {
         if (Sse41.IsSupported)

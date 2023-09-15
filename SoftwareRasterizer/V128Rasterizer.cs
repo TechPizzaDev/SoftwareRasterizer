@@ -385,7 +385,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                     Vector128<ushort> vR16_0 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vR32_0, vR32_1), vMask);
                     Vector128<ushort> vR16_1 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vR32_2, vR32_3), vMask);
-                    Vector128<byte> vR8 = Sse2.PackUnsignedSaturate(vR16_0.AsInt16(), vR16_1.AsInt16());
+                    Vector128<byte> vR8 = V128Helper.PackUnsignedSaturate(vR16_0.AsInt16(), vR16_1.AsInt16());
 
                     Vector128<int> vG32_0 = V128.ConvertToInt32(depth0);
                     Vector128<int> vG32_1 = V128.ConvertToInt32(depth1);
@@ -394,7 +394,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                     Vector128<ushort> vG16_0 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vG32_0, vG32_1), vMask);
                     Vector128<ushort> vG16_1 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vG32_2, vG32_3), vMask);
-                    Vector128<byte> vG8 = Sse2.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
+                    Vector128<byte> vG8 = V128Helper.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
 
                     Vector128<ushort> vRG_Lo = V128Helper.UnpackLow(vR8, vG8).AsUInt16();
                     Vector128<ushort> vRG_Hi = V128Helper.UnpackHigh(vR8, vG8).AsUInt16();
