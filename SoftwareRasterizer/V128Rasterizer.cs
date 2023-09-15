@@ -171,8 +171,9 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         _MM_TRANSPOSE4_PS(ref corners4, ref corners5, ref corners6, ref corners7);
 
         // Even if all bounding box corners have W > 0 here, we may end up with some vertices with W < 0 to due floating point differences; so test with some epsilon if any W < 0.
-        Vector128<float> maxExtent = V128.Max(extents, Permute(extents, 0b01_00_11_10));
-        maxExtent = V128.Max(maxExtent, Permute(maxExtent, 0b10_11_00_01));
+        Vector128<float> maxExtent = V128.Max(extents, V128.Shuffle(extents, V128.Create(2, 3, 0, 1)));
+        maxExtent = V128.Max(maxExtent, V128.Shuffle(maxExtent, V128.Create(1, 0, 3, 2)));
+
         Vector128<float> nearPlaneEpsilon = V128.Multiply(maxExtent, V128.Create(0.001f));
         Vector128<float> closeToNearPlane = V128.BitwiseOr(V128.LessThan(corners3, nearPlaneEpsilon), V128.LessThan(corners7, nearPlaneEpsilon));
         if (!V128Helper.TestZ(closeToNearPlane, closeToNearPlane))
@@ -1323,11 +1324,5 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 }
             }
         }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<float> Permute(Vector128<float> a, byte imm8)
-    {
-        return Sse.Shuffle(a, a, imm8);
     }
 }
