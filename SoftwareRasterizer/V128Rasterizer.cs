@@ -399,10 +399,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<ushort> vRG_Lo = V128Helper.UnpackLow(vR8, vG8).AsUInt16();
                     Vector128<ushort> vRG_Hi = V128Helper.UnpackHigh(vR8, vG8).AsUInt16();
 
-                    Vector128<uint> result1 = Sse2.UnpackLow(vRG_Lo, vZeroMax).AsUInt32();
-                    Vector128<uint> result2 = Sse2.UnpackHigh(vRG_Lo, vZeroMax).AsUInt32();
-                    Vector128<uint> result3 = Sse2.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
-                    Vector128<uint> result4 = Sse2.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
+                    Vector128<uint> result1 = V128Helper.UnpackLow(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector128<uint> result2 = V128Helper.UnpackHigh(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector128<uint> result3 = V128Helper.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
+                    Vector128<uint> result4 = V128Helper.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
 
                     V128.StoreAligned(result1, (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 0);
                     V128.StoreAligned(result2, (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 4);

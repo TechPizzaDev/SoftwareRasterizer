@@ -55,7 +55,7 @@ public static class V128Helper
             Vector128<byte> c = Vector128.ShiftRightArithmetic(mask.AsSByte(), 7).AsByte();
             return Vector128.ConditionalSelect(c, right, left);
         }
-    } 
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> DotProduct_x7F(Vector128<float> a, Vector128<float> b)
@@ -273,7 +273,7 @@ public static class V128Helper
                 right.GetElement(3));
         }
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<byte> UnpackHigh(Vector128<byte> left, Vector128<byte> right)
     {
@@ -297,6 +297,34 @@ public static class V128Helper
             {
                 result = result.WithElement(i * 2 + 0, left.GetElement(i + 8));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i + 8));
+            }
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<ushort> UnpackHigh(Vector128<ushort> left, Vector128<ushort> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackHigh(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipHigh(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<ushort> SoftwareFallback(Vector128<ushort> left, Vector128<ushort> right)
+        {
+            Unsafe.SkipInit(out Vector128<ushort> result);
+            for (int i = 0; i < 4; i++)
+            {
+                result = result.WithElement(i * 2 + 0, left.GetElement(i + 4));
+                result = result.WithElement(i * 2 + 1, right.GetElement(i + 4));
             }
             return result;
         }
@@ -348,6 +376,34 @@ public static class V128Helper
         {
             Unsafe.SkipInit(out Vector128<byte> result);
             for (int i = 0; i < 8; i++)
+            {
+                result = result.WithElement(i * 2 + 0, left.GetElement(i));
+                result = result.WithElement(i * 2 + 1, right.GetElement(i));
+            }
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<ushort> UnpackLow(Vector128<ushort> left, Vector128<ushort> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackLow(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipLow(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<ushort> SoftwareFallback(Vector128<ushort> left, Vector128<ushort> right)
+        {
+            Unsafe.SkipInit(out Vector128<ushort> result);
+            for (int i = 0; i < 4; i++)
             {
                 result = result.WithElement(i * 2 + 0, left.GetElement(i));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i));
