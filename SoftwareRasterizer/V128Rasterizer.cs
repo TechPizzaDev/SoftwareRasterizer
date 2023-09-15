@@ -611,20 +611,20 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 Vector128<int> I3 = V128.LoadAlignedNonTemporal((int*)(vertexDataPacketPtr + 6));
 
                 // Vertex transformation - first W, then X & Y after camera plane culling, then Z after backface culling
-                Vector128<float> Xf0 = Sse2.ConvertToVector128Single(I0);
-                Vector128<float> Xf1 = Sse2.ConvertToVector128Single(I1);
-                Vector128<float> Xf2 = Sse2.ConvertToVector128Single(I2);
-                Vector128<float> Xf3 = Sse2.ConvertToVector128Single(I3);
+                Vector128<float> Xf0 = V128.ConvertToSingle(I0);
+                Vector128<float> Xf1 = V128.ConvertToSingle(I1);
+                Vector128<float> Xf2 = V128.ConvertToSingle(I2);
+                Vector128<float> Xf3 = V128.ConvertToSingle(I3);
 
-                Vector128<float> Yf0 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I0, maskY));
-                Vector128<float> Yf1 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I1, maskY));
-                Vector128<float> Yf2 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I2, maskY));
-                Vector128<float> Yf3 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I3, maskY));
+                Vector128<float> Yf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskY));
+                Vector128<float> Yf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskY));
+                Vector128<float> Yf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskY));
+                Vector128<float> Yf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskY));
 
-                Vector128<float> Zf0 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I0, maskZ));
-                Vector128<float> Zf1 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I1, maskZ));
-                Vector128<float> Zf2 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I2, maskZ));
-                Vector128<float> Zf3 = Sse2.ConvertToVector128Single(V128.BitwiseAnd(I3, maskZ));
+                Vector128<float> Zf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskZ));
+                Vector128<float> Zf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskZ));
+                Vector128<float> Zf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskZ));
+                Vector128<float> Zf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskZ));
 
                 Vector128<float> mat00 = V128.Create(mat0.GetElement(0));
                 Vector128<float> mat01 = V128.Create(mat0.GetElement(1));
@@ -948,8 +948,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 depthPlane1 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, V128.Multiply(z12, edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, V128.Multiply(z30, edgeNormalsX4)), greaterArea));
                 depthPlane2 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, V128.Multiply(z12, edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, V128.Multiply(z30, edgeNormalsY4)), greaterArea));
 
-                x0 = V128.Subtract(x0, Sse2.ConvertToVector128Single(minX));
-                y0 = V128.Subtract(y0, Sse2.ConvertToVector128Single(minY));
+                x0 = V128.Subtract(x0, V128.ConvertToSingle(minX));
+                y0 = V128.Subtract(y0, V128.ConvertToSingle(minY));
 
                 depthPlane0 = Fma.MultiplyAddNegated(x0, depthPlane1, Fma.MultiplyAddNegated(y0, depthPlane2, z0));
 
@@ -993,13 +993,13 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 edgeOffsets2 = Fma.MultiplyAddNegated(x2, edgeNormalsX2, Fma.MultiplyAddNegated(y2, edgeNormalsY2, add128));
                 edgeOffsets3 = Fma.MultiplyAddNegated(x3, edgeNormalsX3, Fma.MultiplyAddNegated(y3, edgeNormalsY3, add128));
 
-                edgeOffsets1 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX1, edgeOffsets1);
-                edgeOffsets2 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX2, edgeOffsets2);
-                edgeOffsets3 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minX), edgeNormalsX3, edgeOffsets3);
+                edgeOffsets1 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX1, edgeOffsets1);
+                edgeOffsets2 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX2, edgeOffsets2);
+                edgeOffsets3 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX3, edgeOffsets3);
 
-                edgeOffsets1 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY1, edgeOffsets1);
-                edgeOffsets2 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY2, edgeOffsets2);
-                edgeOffsets3 = Fma.MultiplyAdd(Sse2.ConvertToVector128Single(minY), edgeNormalsY3, edgeOffsets3);
+                edgeOffsets1 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY1, edgeOffsets1);
+                edgeOffsets2 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY2, edgeOffsets2);
+                edgeOffsets3 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY3, edgeOffsets3);
 
                 // Quantize slopes
                 Vector128<int> slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);
