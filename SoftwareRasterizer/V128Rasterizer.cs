@@ -45,7 +45,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         V128.StoreAligned(mat1, m_modelViewProjectionRaw + 4);
         V128.StoreAligned(mat2, m_modelViewProjectionRaw + 8);
         V128.StoreAligned(mat3, m_modelViewProjectionRaw + 12);
-
+        
         // Bake viewport transform into matrix and 6shift by half a block
         mat0 = V128.Multiply(V128.Add(mat0, mat3), V128.Create(m_width * 0.5f - 4.0f));
         mat1 = V128.Multiply(V128.Add(mat1, mat3), V128.Create(m_height * 0.5f - 4.0f));
@@ -216,7 +216,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<float> boundsF = V128.Min(V128Helper.UnpackLow(minsXY, maxsXY), V128Helper.UnpackHigh(minsXY, maxsXY));
 
         // Round towards -infinity and convert to int
-        Vector128<int> boundsI = Sse2.ConvertToVector128Int32WithTruncation(Sse41.RoundToNegativeInfinity(boundsF));
+        Vector128<int> boundsI = V128.ConvertToInt32(Sse41.RoundToNegativeInfinity(boundsF));
 
         // Store as scalars
         int* bounds = stackalloc int[4];
@@ -378,19 +378,19 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<float> depth2 = V128.LoadAligned((float*)(linDepthA + y * 2 + 2));
                     Vector128<float> depth3 = V128.LoadAligned((float*)(linDepthA + y * 2 + 3));
 
-                    Vector128<int> vR32_0 = Sse2.ConvertToVector128Int32WithTruncation(V128.Multiply(depth0, vRcp100));
-                    Vector128<int> vR32_1 = Sse2.ConvertToVector128Int32WithTruncation(V128.Multiply(depth1, vRcp100));
-                    Vector128<int> vR32_2 = Sse2.ConvertToVector128Int32WithTruncation(V128.Multiply(depth2, vRcp100));
-                    Vector128<int> vR32_3 = Sse2.ConvertToVector128Int32WithTruncation(V128.Multiply(depth3, vRcp100));
+                    Vector128<int> vR32_0 = V128.ConvertToInt32(V128.Multiply(depth0, vRcp100));
+                    Vector128<int> vR32_1 = V128.ConvertToInt32(V128.Multiply(depth1, vRcp100));
+                    Vector128<int> vR32_2 = V128.ConvertToInt32(V128.Multiply(depth2, vRcp100));
+                    Vector128<int> vR32_3 = V128.ConvertToInt32(V128.Multiply(depth3, vRcp100));
 
                     Vector128<ushort> vR16_0 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vR32_0, vR32_1), vMask);
                     Vector128<ushort> vR16_1 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vR32_2, vR32_3), vMask);
                     Vector128<byte> vR8 = Sse2.PackUnsignedSaturate(vR16_0.AsInt16(), vR16_1.AsInt16());
 
-                    Vector128<int> vG32_0 = Sse2.ConvertToVector128Int32WithTruncation(depth0);
-                    Vector128<int> vG32_1 = Sse2.ConvertToVector128Int32WithTruncation(depth1);
-                    Vector128<int> vG32_2 = Sse2.ConvertToVector128Int32WithTruncation(depth2);
-                    Vector128<int> vG32_3 = Sse2.ConvertToVector128Int32WithTruncation(depth3);
+                    Vector128<int> vG32_0 = V128.ConvertToInt32(depth0);
+                    Vector128<int> vG32_1 = V128.ConvertToInt32(depth1);
+                    Vector128<int> vG32_2 = V128.ConvertToInt32(depth2);
+                    Vector128<int> vG32_3 = V128.ConvertToInt32(depth3);
 
                     Vector128<ushort> vG16_0 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vG32_0, vG32_1), vMask);
                     Vector128<ushort> vG16_1 = V128.BitwiseAnd(V128Helper.PackUnsignedSaturate(vG32_2, vG32_3), vMask);
@@ -484,7 +484,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         const float mul = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f / ((OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
         const float add = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f + 0.5f;
 
-        Vector128<int> quantizedSlope = Sse2.ConvertToVector128Int32WithTruncation(Fma.MultiplyAdd(nx, V128.Create(mul), V128.Create(add)));
+        Vector128<int> quantizedSlope = V128.ConvertToInt32(Fma.MultiplyAdd(nx, V128.Create(mul), V128.Create(add)));
         return V128.ShiftLeft(V128.Subtract(V128.ShiftLeft(quantizedSlope, 1), yNeg), OFFSET_QUANTIZATION_BITS);
     }
 
@@ -876,10 +876,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                 // Clamp and round
                 Vector128<int> minX, minY, maxX, maxY;
-                minX = V128.Max(Sse2.ConvertToVector128Int32WithTruncation(V128.Add(minFx, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
-                minY = V128.Max(Sse2.ConvertToVector128Int32WithTruncation(V128.Add(minFy, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
-                maxX = V128.Min(Sse2.ConvertToVector128Int32WithTruncation(V128.Add(maxFx, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksX));
-                maxY = V128.Min(Sse2.ConvertToVector128Int32WithTruncation(V128.Add(maxFy, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksY));
+                minX = V128.Max(V128.ConvertToInt32(V128.Add(minFx, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
+                minY = V128.Max(V128.ConvertToInt32(V128.Add(minFy, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
+                maxX = V128.Min(V128.ConvertToInt32(V128.Add(maxFx, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksX));
+                maxY = V128.Min(V128.ConvertToInt32(V128.Add(maxFy, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksY));
 
                 // Check overlap between bounding box and frustum
                 Vector128<int> inFrustum = V128.BitwiseAnd(V128.GreaterThan(maxX, minX), V128.GreaterThan(maxY, minY));
@@ -1173,7 +1173,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                         anyBlockHit = true;
 
-                        Vector128<int> offsetClamped = V128.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero);
+                        Vector128<int> offsetClamped = V128.Max(V128.ConvertToInt32(offset), Vector128<int>.Zero);
 
                         Vector128<int> lookup = V128.BitwiseOr(slopeLookup, offsetClamped);
 
@@ -1189,7 +1189,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     }
                     else
                     {
-                        Vector128<int> offsetClamped = V128.Min(V128.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero), V128.Create(OFFSET_QUANTIZATION_FACTOR - 1));
+                        Vector128<int> offsetClamped = V128.Min(V128.Max(V128.ConvertToInt32(offset), Vector128<int>.Zero), V128.Create(OFFSET_QUANTIZATION_FACTOR - 1));
                         Vector128<int> lookup = V128.BitwiseOr(slopeLookup, offsetClamped);
 
                         // Generate block mask
