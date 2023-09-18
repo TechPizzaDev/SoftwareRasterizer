@@ -421,6 +421,31 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<long> UnpackHigh(Vector128<long> left, Vector128<long> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackHigh(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipHigh(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<long> SoftwareFallback(Vector128<long> left, Vector128<long> right)
+        {
+            Unsafe.SkipInit(out Vector128<long> result);
+            result = result.WithElement(0, left.GetElement(1));
+            result = result.WithElement(1, right.GetElement(1));
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> UnpackLow(Vector128<float> left, Vector128<float> right)
     {
         if (Sse.IsSupported)
@@ -526,6 +551,31 @@ public static class V128Helper
                 result = result.WithElement(i * 2 + 0, left.GetElement(i));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i));
             }
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<long> UnpackLow(Vector128<long> left, Vector128<long> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackLow(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipLow(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<long> SoftwareFallback(Vector128<long> left, Vector128<long> right)
+        {
+            Unsafe.SkipInit(out Vector128<long> result);
+            result = result.WithElement(0, left.GetElement(0));
+            result = result.WithElement(1, right.GetElement(0));
             return result;
         }
     }

@@ -453,10 +453,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<long> _Tmp2 = V128Helper.UnpackHigh(A, B).AsInt64();
         Vector128<long> _Tmp3 = V128Helper.UnpackHigh(C, D).AsInt64();
 
-        Vector128<int> tA = Sse2.UnpackLow(_Tmp0, _Tmp1).AsInt32();
-        Vector128<int> tB = Sse2.UnpackHigh(_Tmp0, _Tmp1).AsInt32();
-        Vector128<int> tC = Sse2.UnpackLow(_Tmp2, _Tmp3).AsInt32();
-        Vector128<int> tD = Sse2.UnpackHigh(_Tmp2, _Tmp3).AsInt32();
+        Vector128<int> tA = V128Helper.UnpackLow(_Tmp0, _Tmp1).AsInt32();
+        Vector128<int> tB = V128Helper.UnpackHigh(_Tmp0, _Tmp1).AsInt32();
+        Vector128<int> tC = V128Helper.UnpackLow(_Tmp2, _Tmp3).AsInt32();
+        Vector128<int> tD = V128Helper.UnpackHigh(_Tmp2, _Tmp3).AsInt32();
 
         V128.StoreAligned(tA, (int*)(@out + outOffset + 0));
         V128.StoreAligned(tB, (int*)(@out + outOffset + 2));
@@ -1271,7 +1271,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     {
                         Vector128<ushort> A = V128.CreateScalar((long)blockMask).AsUInt16();
                         Vector128<ushort> B = V128.ShiftLeft(A.AsInt16(), 4).AsUInt16();
-
+                        
                         Vector128<byte> C_A = Sse41.Blend(A, B, 0b11_11_00_00).AsByte();
                         Vector128<byte> C_B = Sse41.Blend(A, B, 0b00_00_11_11).AsByte();
 
