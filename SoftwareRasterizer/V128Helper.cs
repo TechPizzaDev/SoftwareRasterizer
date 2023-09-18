@@ -328,11 +328,12 @@ public static class V128Helper
 
         static Vector128<float> SoftwareFallback(Vector128<float> left, Vector128<float> right)
         {
-            return Vector128.Create(
-                left.GetElement(2),
-                right.GetElement(2),
-                left.GetElement(3),
-                right.GetElement(3));
+            Unsafe.SkipInit(out Vector128<float> result);
+            result = result.WithElement(0, left.GetElement(2));
+            result = result.WithElement(1, right.GetElement(2));
+            result = result.WithElement(2, left.GetElement(3));
+            result = result.WithElement(3, right.GetElement(3));
+            return result;
         }
     }
 
@@ -355,7 +356,7 @@ public static class V128Helper
         static Vector128<byte> SoftwareFallback(Vector128<byte> left, Vector128<byte> right)
         {
             Unsafe.SkipInit(out Vector128<byte> result);
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < Vector128<byte>.Count / 2; i++)
             {
                 result = result.WithElement(i * 2 + 0, left.GetElement(i + 8));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i + 8));
@@ -383,7 +384,7 @@ public static class V128Helper
         static Vector128<ushort> SoftwareFallback(Vector128<ushort> left, Vector128<ushort> right)
         {
             Unsafe.SkipInit(out Vector128<ushort> result);
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < Vector128<ushort>.Count / 2; i++)
             {
                 result = result.WithElement(i * 2 + 0, left.GetElement(i + 4));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i + 4));
@@ -411,11 +412,10 @@ public static class V128Helper
         static Vector128<int> SoftwareFallback(Vector128<int> left, Vector128<int> right)
         {
             Unsafe.SkipInit(out Vector128<int> result);
-            for (int i = 0; i < 2; i++)
-            {
-                result = result.WithElement(i * 2 + 0, left.GetElement(i + 2));
-                result = result.WithElement(i * 2 + 1, right.GetElement(i + 2));
-            }
+            result = result.WithElement(0, left.GetElement(2));
+            result = result.WithElement(1, right.GetElement(2));
+            result = result.WithElement(2, left.GetElement(3));
+            result = result.WithElement(3, right.GetElement(3));
             return result;
         }
     }
@@ -463,11 +463,12 @@ public static class V128Helper
 
         static Vector128<float> SoftwareFallback(Vector128<float> left, Vector128<float> right)
         {
-            return Vector128.Create(
-                left.GetElement(0),
-                right.GetElement(0),
-                left.GetElement(1),
-                right.GetElement(1));
+            Unsafe.SkipInit(out Vector128<float> result);
+            result = result.WithElement(0, left.GetElement(0));
+            result = result.WithElement(1, right.GetElement(0));
+            result = result.WithElement(2, left.GetElement(1));
+            result = result.WithElement(3, right.GetElement(1));
+            return result;
         }
     }
 
@@ -490,7 +491,7 @@ public static class V128Helper
         static Vector128<byte> SoftwareFallback(Vector128<byte> left, Vector128<byte> right)
         {
             Unsafe.SkipInit(out Vector128<byte> result);
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < Vector128<byte>.Count / 2; i++)
             {
                 result = result.WithElement(i * 2 + 0, left.GetElement(i));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i));
@@ -518,7 +519,7 @@ public static class V128Helper
         static Vector128<ushort> SoftwareFallback(Vector128<ushort> left, Vector128<ushort> right)
         {
             Unsafe.SkipInit(out Vector128<ushort> result);
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < Vector128<ushort>.Count / 2; i++)
             {
                 result = result.WithElement(i * 2 + 0, left.GetElement(i));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i));
@@ -546,11 +547,10 @@ public static class V128Helper
         static Vector128<int> SoftwareFallback(Vector128<int> left, Vector128<int> right)
         {
             Unsafe.SkipInit(out Vector128<int> result);
-            for (int i = 0; i < 2; i++)
-            {
-                result = result.WithElement(i * 2 + 0, left.GetElement(i));
-                result = result.WithElement(i * 2 + 1, right.GetElement(i));
-            }
+            result = result.WithElement(0, left.GetElement(0));
+            result = result.WithElement(1, right.GetElement(0));
+            result = result.WithElement(2, left.GetElement(1));
+            result = result.WithElement(3, right.GetElement(1));
             return result;
         }
     }
