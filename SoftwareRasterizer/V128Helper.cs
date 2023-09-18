@@ -255,6 +255,33 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> RoundToNearestInteger(Vector128<float> value)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.RoundToNearestInteger(value);
+        }
+        else if (AdvSimd.IsSupported)
+        {
+            return AdvSimd.RoundToNearest(value);
+        }
+        else
+        {
+            return SoftwareFallback(value);
+        }
+
+        static Vector128<float> SoftwareFallback(Vector128<float> value)
+        {
+            Unsafe.SkipInit(out Vector128<float> result);
+            for (int i = 0; i < Vector128<float>.Count; i++)
+            {
+                result = result.WithElement(i, float.Round(value.GetElement(i)));
+            }
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TestZ(Vector128<float> left, Vector128<float> right)
     {
         if (Avx.IsSupported)

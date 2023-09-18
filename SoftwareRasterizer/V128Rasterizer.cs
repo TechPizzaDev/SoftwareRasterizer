@@ -45,7 +45,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         V128.StoreAligned(mat1, m_modelViewProjectionRaw + 4);
         V128.StoreAligned(mat2, m_modelViewProjectionRaw + 8);
         V128.StoreAligned(mat3, m_modelViewProjectionRaw + 12);
-        
+
         // Bake viewport transform into matrix and 6shift by half a block
         mat0 = V128.Multiply(V128.Add(mat0, mat3), V128.Create(m_width * 0.5f - 4.0f));
         mat1 = V128.Multiply(V128.Add(mat1, mat3), V128.Create(m_height * 0.5f - 4.0f));
@@ -217,7 +217,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<float> boundsF = V128.Min(V128Helper.UnpackLow(minsXY, maxsXY), V128Helper.UnpackHigh(minsXY, maxsXY));
 
         // Round towards -infinity and convert to int
-        Vector128<int> boundsI = V128.ConvertToInt32(Sse41.RoundToNegativeInfinity(boundsF));
+        Vector128<int> boundsI = V128.ConvertToInt32(V128.Floor(boundsF));
 
         // Store as scalars
         int* bounds = stackalloc int[4];
@@ -678,15 +678,15 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                 // Round to integer coordinates to improve culling of zero-area triangles
                 Vector128<float> roundFactor = V128.Create(0.125f);
-                Vector128<float> x0 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(X0, invW0)), roundFactor);
-                Vector128<float> x1 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(X1, invW1)), roundFactor);
-                Vector128<float> x2 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(X2, invW2)), roundFactor);
-                Vector128<float> x3 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(X3, invW3)), roundFactor);
+                Vector128<float> x0 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X0, invW0)), roundFactor);
+                Vector128<float> x1 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X1, invW1)), roundFactor);
+                Vector128<float> x2 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X2, invW2)), roundFactor);
+                Vector128<float> x3 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X3, invW3)), roundFactor);
 
-                Vector128<float> y0 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(Y0, invW0)), roundFactor);
-                Vector128<float> y1 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(Y1, invW1)), roundFactor);
-                Vector128<float> y2 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(Y2, invW2)), roundFactor);
-                Vector128<float> y3 = V128.Multiply(Sse41.RoundToNearestInteger(V128.Multiply(Y3, invW3)), roundFactor);
+                Vector128<float> y0 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y0, invW0)), roundFactor);
+                Vector128<float> y1 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y1, invW1)), roundFactor);
+                Vector128<float> y2 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y2, invW2)), roundFactor);
+                Vector128<float> y3 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y3, invW3)), roundFactor);
 
                 // Compute unnormalized edge directions
                 Vector128<float> edgeNormalsX0 = V128.Subtract(y1, y0);
