@@ -448,10 +448,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         int outOffset,
         Vector128<int>* @out)
     {
-        Vector128<long> _Tmp0 = Sse2.UnpackLow(A, B).AsInt64();
-        Vector128<long> _Tmp1 = Sse2.UnpackLow(C, D).AsInt64();
-        Vector128<long> _Tmp2 = Sse2.UnpackHigh(A, B).AsInt64();
-        Vector128<long> _Tmp3 = Sse2.UnpackHigh(C, D).AsInt64();
+        Vector128<long> _Tmp0 = V128Helper.UnpackLow(A, B).AsInt64();
+        Vector128<long> _Tmp1 = V128Helper.UnpackLow(C, D).AsInt64();
+        Vector128<long> _Tmp2 = V128Helper.UnpackHigh(A, B).AsInt64();
+        Vector128<long> _Tmp3 = V128Helper.UnpackHigh(C, D).AsInt64();
 
         Vector128<int> tA = Sse2.UnpackLow(_Tmp0, _Tmp1).AsInt32();
         Vector128<int> tB = Sse2.UnpackHigh(_Tmp0, _Tmp1).AsInt32();

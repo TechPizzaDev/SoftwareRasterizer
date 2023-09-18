@@ -393,6 +393,34 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<int> UnpackHigh(Vector128<int> left, Vector128<int> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackHigh(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipHigh(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<int> SoftwareFallback(Vector128<int> left, Vector128<int> right)
+        {
+            Unsafe.SkipInit(out Vector128<int> result);
+            for (int i = 0; i < 2; i++)
+            {
+                result = result.WithElement(i * 2 + 0, left.GetElement(i + 2));
+                result = result.WithElement(i * 2 + 1, right.GetElement(i + 2));
+            }
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> UnpackLow(Vector128<float> left, Vector128<float> right)
     {
         if (Sse.IsSupported)
@@ -466,6 +494,34 @@ public static class V128Helper
         {
             Unsafe.SkipInit(out Vector128<ushort> result);
             for (int i = 0; i < 4; i++)
+            {
+                result = result.WithElement(i * 2 + 0, left.GetElement(i));
+                result = result.WithElement(i * 2 + 1, right.GetElement(i));
+            }
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<int> UnpackLow(Vector128<int> left, Vector128<int> right)
+    {
+        if (Sse2.IsSupported)
+        {
+            return Sse2.UnpackLow(left, right);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.ZipLow(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<int> SoftwareFallback(Vector128<int> left, Vector128<int> right)
+        {
+            Unsafe.SkipInit(out Vector128<int> result);
+            for (int i = 0; i < 2; i++)
             {
                 result = result.WithElement(i * 2 + 0, left.GetElement(i));
                 result = result.WithElement(i * 2 + 1, right.GetElement(i));
