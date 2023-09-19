@@ -419,7 +419,6 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<float> B,
         Vector128<float> C,
         Vector128<float> D,
-        int outOffset,
         Vector128<float>* @out)
     {
         Vector128<float> _Tmp0 = V128Helper.CombineLower(A, B);
@@ -432,10 +431,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<float> tC = V128Helper.UnzipEven(_Tmp2, _Tmp3);
         Vector128<float> tD = V128Helper.UnzipOdd(_Tmp2, _Tmp3);
 
-        V128.StoreAligned(tA, (float*)(@out + outOffset + 0));
-        V128.StoreAligned(tB, (float*)(@out + outOffset + 2));
-        V128.StoreAligned(tC, (float*)(@out + outOffset + 4));
-        V128.StoreAligned(tD, (float*)(@out + outOffset + 6));
+        V128.StoreAligned(tA, (float*)(@out + 0));
+        V128.StoreAligned(tB, (float*)(@out + 2));
+        V128.StoreAligned(tC, (float*)(@out + 4));
+        V128.StoreAligned(tD, (float*)(@out + 6));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -444,7 +443,6 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<int> B,
         Vector128<int> C,
         Vector128<int> D,
-        int outOffset,
         Vector128<int>* @out)
     {
         Vector128<long> _Tmp0 = V128Helper.UnpackLow(A, B).AsInt64();
@@ -457,10 +455,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<int> tC = V128Helper.UnpackLow(_Tmp2, _Tmp3).AsInt32();
         Vector128<int> tD = V128Helper.UnpackHigh(_Tmp2, _Tmp3).AsInt32();
 
-        V128.StoreAligned(tA, (int*)(@out + outOffset + 0));
-        V128.StoreAligned(tB, (int*)(@out + outOffset + 2));
-        V128.StoreAligned(tC, (int*)(@out + outOffset + 4));
-        V128.StoreAligned(tD, (int*)(@out + outOffset + 6));
+        V128.StoreAligned(tA, (int*)(@out + 0));
+        V128.StoreAligned(tB, (int*)(@out + 2));
+        V128.StoreAligned(tC, (int*)(@out + 4));
+        V128.StoreAligned(tD, (int*)(@out + 6));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1016,15 +1014,15 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 V128.StoreAligned(rangeY, (int*)(rangesY + 4 * partIndex));
 
                 // Transpose into AoS
-                transpose256(depthPlane0, depthPlane1, depthPlane2, Vector128<float>.Zero, partIndex, depthPlane);
+                transpose256(depthPlane0, depthPlane1, depthPlane2, Vector128<float>.Zero, depthPlane + partIndex);
 
-                transpose256(edgeNormalsX0, edgeNormalsX1, edgeNormalsX2, edgeNormalsX3, partIndex, edgeNormalsX);
+                transpose256(edgeNormalsX0, edgeNormalsX1, edgeNormalsX2, edgeNormalsX3, edgeNormalsX + partIndex);
 
-                transpose256(edgeNormalsY0, edgeNormalsY1, edgeNormalsY2, edgeNormalsY3, partIndex, edgeNormalsY);
+                transpose256(edgeNormalsY0, edgeNormalsY1, edgeNormalsY2, edgeNormalsY3, edgeNormalsY + partIndex);
 
-                transpose256(edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3, partIndex, edgeOffsets);
+                transpose256(edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3, edgeOffsets + partIndex);
 
-                transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, partIndex, slopeLookups);
+                transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, slopeLookups + partIndex);
 
                 return 0;
             }
