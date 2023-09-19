@@ -423,15 +423,15 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         int outOffset,
         Vector128<float>* @out)
     {
-        Vector128<float> _Tmp0 = Sse.Shuffle(A, B, 0x44);
-        Vector128<float> _Tmp2 = Sse.Shuffle(A, B, 0xEE);
-        Vector128<float> _Tmp1 = Sse.Shuffle(C, D, 0x44);
-        Vector128<float> _Tmp3 = Sse.Shuffle(C, D, 0xEE);
+        Vector128<float> _Tmp0 = V128Helper.CombineLower(A, B);
+        Vector128<float> _Tmp2 = V128Helper.CombineUpper(A, B);
+        Vector128<float> _Tmp1 = V128Helper.CombineLower(C, D);
+        Vector128<float> _Tmp3 = V128Helper.CombineUpper(C, D);
 
-        Vector128<float> tA = Sse.Shuffle(_Tmp0, _Tmp1, 0x88);
-        Vector128<float> tB = Sse.Shuffle(_Tmp0, _Tmp1, 0xDD);
-        Vector128<float> tC = Sse.Shuffle(_Tmp2, _Tmp3, 0x88);
-        Vector128<float> tD = Sse.Shuffle(_Tmp2, _Tmp3, 0xDD);
+        Vector128<float> tA = V128Helper.UnzipEven(_Tmp0, _Tmp1);
+        Vector128<float> tB = V128Helper.UnzipOdd(_Tmp0, _Tmp1);
+        Vector128<float> tC = V128Helper.UnzipEven(_Tmp2, _Tmp3);
+        Vector128<float> tD = V128Helper.UnzipOdd(_Tmp2, _Tmp3);
 
         V128.StoreAligned(tA, (float*)(@out + outOffset + 0));
         V128.StoreAligned(tB, (float*)(@out + outOffset + 2));
@@ -1271,7 +1271,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     {
                         Vector128<ushort> A = V128.CreateScalar((long)blockMask).AsUInt16();
                         Vector128<ushort> B = V128.ShiftLeft(A.AsInt16(), 4).AsUInt16();
-                        
+
                         Vector128<byte> C_A = Sse41.Blend(A, B, 0b11_11_00_00).AsByte();
                         Vector128<byte> C_B = Sse41.Blend(A, B, 0b00_00_11_11).AsByte();
 

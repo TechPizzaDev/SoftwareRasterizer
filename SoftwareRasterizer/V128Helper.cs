@@ -58,6 +58,32 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> CombineLower(Vector128<float> left, Vector128<float> right)
+    {
+        if (Sse.IsSupported)
+        {
+            return Sse.Shuffle(left, right, 0b01_00_01_00);
+        }
+        else
+        {
+            return Vector128.Create(left.GetLower(), right.GetLower());
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> CombineUpper(Vector128<float> left, Vector128<float> right)
+    {
+        if (Sse.IsSupported)
+        {
+            return Sse.Shuffle(left, right, 0b11_10_11_10);
+        }
+        else
+        {
+            return Vector128.Create(left.GetUpper(), right.GetUpper());
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<int> ConvertToInt32(Vector128<ushort> value)
     {
         if (Sse41.IsSupported)
@@ -576,6 +602,60 @@ public static class V128Helper
             Unsafe.SkipInit(out Vector128<long> result);
             result = result.WithElement(0, left.GetElement(0));
             result = result.WithElement(1, right.GetElement(0));
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> UnzipEven(Vector128<float> left, Vector128<float> right)
+    {
+        if (Sse.IsSupported)
+        {
+            return Sse.Shuffle(left, right, 0b10_00_10_00);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.UnzipEven(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<float> SoftwareFallback(Vector128<float> left, Vector128<float> right)
+        {
+            Unsafe.SkipInit(out Vector128<float> result);
+            result = result.WithElement(0, left.GetElement(0));
+            result = result.WithElement(1, left.GetElement(2));
+            result = result.WithElement(2, right.GetElement(0));
+            result = result.WithElement(3, right.GetElement(2));
+            return result;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> UnzipOdd(Vector128<float> left, Vector128<float> right)
+    {
+        if (Sse.IsSupported)
+        {
+            return Sse.Shuffle(left, right, 0b11_01_11_01);
+        }
+        else if (AdvSimd.Arm64.IsSupported)
+        {
+            return AdvSimd.Arm64.UnzipOdd(left, right);
+        }
+        else
+        {
+            return SoftwareFallback(left, right);
+        }
+
+        static Vector128<float> SoftwareFallback(Vector128<float> left, Vector128<float> right)
+        {
+            Unsafe.SkipInit(out Vector128<float> result);
+            result = result.WithElement(0, left.GetElement(1));
+            result = result.WithElement(1, left.GetElement(3));
+            result = result.WithElement(2, right.GetElement(1));
+            result = result.WithElement(3, right.GetElement(3));
             return result;
         }
     }
