@@ -2,7 +2,6 @@ using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
-using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
 
@@ -1272,8 +1271,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                         Vector128<ushort> A = V128.CreateScalar((long)blockMask).AsUInt16();
                         Vector128<ushort> B = V128.ShiftLeft(A.AsInt16(), 4).AsUInt16();
 
-                        Vector128<byte> C_A = Sse41.Blend(A, B, 0b11_11_00_00).AsByte();
-                        Vector128<byte> C_B = Sse41.Blend(A, B, 0b00_00_11_11).AsByte();
+                        Vector128<byte> C_A = V128Helper.Blend(A, B, 0b11_11_00_00).AsByte();
+                        Vector128<byte> C_B = V128Helper.Blend(A, B, 0b00_00_11_11).AsByte();
 
                         Vector128<short> rowMask_A = V128Helper.UnpackLow(C_A, C_A).AsInt16();
                         Vector128<short> rowMask_B = V128Helper.UnpackLow(C_B, C_B).AsInt16();

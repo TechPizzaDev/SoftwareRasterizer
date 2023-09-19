@@ -1,4 +1,6 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
@@ -26,6 +28,28 @@ public static class V128Helper
             Vector128<uint> lo = Vector128.ShiftRightLogical(Vector128.Add(lo_l, lo_r), 1);
             Vector128<uint> hi = Vector128.ShiftRightLogical(Vector128.Add(hi_l, hi_r), 1);
             return Vector128.Narrow(lo, hi);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<ushort> Blend(Vector128<ushort> left, Vector128<ushort> right, [ConstantExpected] byte control)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.Blend(left, right, control);
+        }
+        else
+        {
+            Vector128<ushort> mask = Vector128.Create(
+                ((control & (1 << 0)) != 0) ? (ushort)0xff : (ushort)0,
+                ((control & (1 << 1)) != 0) ? (ushort)0xff : (ushort)0,
+                ((control & (1 << 2)) != 0) ? (ushort)0xff : (ushort)0,
+                ((control & (1 << 3)) != 0) ? (ushort)0xff : (ushort)0,
+                ((control & (1 << 4)) != 0) ? (ushort)0xff : (ushort)0,
+                ((control & (1 << 5)) != 0) ? (ushort)0xff : (ushort)0,
+                ((control & (1 << 6)) != 0) ? (ushort)0xff : (ushort)0,
+                ((control & (1 << 7)) != 0) ? (ushort)0xff : (ushort)0);
+            return Vector128.ConditionalSelect(mask, right, left);
         }
     }
 
@@ -619,6 +643,7 @@ public static class V128Helper
         }
         else
         {
+
             return SoftwareFallback(left, right);
         }
 
