@@ -495,10 +495,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Vector128<ushort> packDepthPremultiplied(Vector128<float> depth)
+    private static Vector64<ushort> packDepthPremultiplied(Vector128<float> depth)
     {
         Vector128<int> x = V128.ShiftRightArithmetic(depth.AsInt32(), 12);
-        return V128Helper.PackUnsignedSaturate(x, Vector128<int>.Zero);
+        return V128Helper.PackUnsignedSaturate(x);
     }
 
     public override void rasterize<T>(in Occluder occluder)
@@ -507,10 +507,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         uint packetCount = occluder.m_packetCount;
 
         // Note that unaligned loads do not have a latency penalty on CPUs with SSE4 support
-        Vector128<float> mat0 = V128.Load(m_modelViewProjection + 0);
-        Vector128<float> mat1 = V128.Load(m_modelViewProjection + 4);
-        Vector128<float> mat2 = V128.Load(m_modelViewProjection + 8);
-        Vector128<float> mat3 = V128.Load(m_modelViewProjection + 12);
+        Vector128<float> mat0 = V128.LoadAligned(m_modelViewProjection + 0);
+        Vector128<float> mat1 = V128.LoadAligned(m_modelViewProjection + 4);
+        Vector128<float> mat2 = V128.LoadAligned(m_modelViewProjection + 8);
+        Vector128<float> mat3 = V128.LoadAligned(m_modelViewProjection + 12);
 
         Vector128<float> boundsMin = occluder.m_refMin.AsVector128();
         Vector128<float> boundsExtents = V128.Subtract(occluder.m_refMax.AsVector128(), boundsMin);
@@ -910,9 +910,9 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     maxZ = V128Helper.BlendVariable(maxZ, V128.Create(1.0f), V128.BitwiseOr(V128.BitwiseOr(wSign0, wSign1), V128.BitwiseOr(wSign2, wSign3)));
                 }
 
-                Vector128<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
+                Vector64<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
 
-                V128.Store(packedDepthBounds, depthBounds + 4 * partIndex);
+                Vector64.Store(packedDepthBounds, depthBounds + 4 * partIndex); 
 
                 // Compute screen space depth plane
                 Vector128<float> greaterArea = V128.LessThan(V128.AndNot(area0, minusZero128), V128.AndNot(area2, minusZero128));

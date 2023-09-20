@@ -209,6 +209,25 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector64<ushort> PackUnsignedSaturate(Vector128<int> left)
+    {
+        if (Sse41.IsSupported)
+        {
+            return Sse41.PackUnsignedSaturate(left, Vector128<int>.Zero).GetLower();
+        }
+        else if (AdvSimd.IsSupported)
+        {
+            return AdvSimd.ExtractNarrowingSaturateUnsignedLower(left);
+        }
+        else
+        {
+            Vector128<int> max = Vector128.Create((int)ushort.MaxValue);
+            Vector128<uint> satLeft = Vector128.Max(Vector128<int>.Zero, Vector128.Min(left, max)).AsUInt32();
+            return Vector64.Narrow(satLeft.GetLower(), satLeft.GetUpper());
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> PermuteFrom0(Vector128<float> value)
     {
         return Vector128.Create(value.ToScalar());
