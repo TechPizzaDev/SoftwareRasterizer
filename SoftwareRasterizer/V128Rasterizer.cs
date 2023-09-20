@@ -506,9 +506,6 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<int>* vertexData = (Vector128<int>*)occluder.m_vertexData;
         uint packetCount = occluder.m_packetCount;
 
-        Vector128<int> maskY = V128.Create(2047 << 10);
-        Vector128<int> maskZ = V128.Create(1023);
-
         // Note that unaligned loads do not have a latency penalty on CPUs with SSE4 support
         Vector128<float> mat0 = V128.Load(m_modelViewProjection + 0);
         Vector128<float> mat1 = V128.Load(m_modelViewProjection + 4);
@@ -614,40 +611,42 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 Vector128<float> Xf2 = V128.ConvertToSingle(I2);
                 Vector128<float> Xf3 = V128.ConvertToSingle(I3);
 
+                Vector128<int> maskY = V128.Create(2047 << 10);
                 Vector128<float> Yf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskY));
                 Vector128<float> Yf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskY));
                 Vector128<float> Yf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskY));
                 Vector128<float> Yf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskY));
 
+                Vector128<int> maskZ = V128.Create(1023);
                 Vector128<float> Zf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskZ));
                 Vector128<float> Zf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskZ));
                 Vector128<float> Zf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskZ));
                 Vector128<float> Zf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskZ));
 
-                Vector128<float> mat00 = V128.Create(mat0.GetElement(0));
-                Vector128<float> mat01 = V128.Create(mat0.GetElement(1));
-                Vector128<float> mat02 = V128.Create(mat0.GetElement(2));
-                Vector128<float> mat03 = V128.Create(mat0.GetElement(3));
+                Vector128<float> mat00 = V128Helper.PermuteFrom0(mat0);
+                Vector128<float> mat01 = V128Helper.PermuteFrom1(mat0);
+                Vector128<float> mat02 = V128Helper.PermuteFrom2(mat0);
+                Vector128<float> mat03 = V128Helper.PermuteFrom3(mat0);
 
                 Vector128<float> X0 = Fma.MultiplyAdd(Xf0, mat00, Fma.MultiplyAdd(Yf0, mat01, Fma.MultiplyAdd(Zf0, mat02, mat03)));
                 Vector128<float> X1 = Fma.MultiplyAdd(Xf1, mat00, Fma.MultiplyAdd(Yf1, mat01, Fma.MultiplyAdd(Zf1, mat02, mat03)));
                 Vector128<float> X2 = Fma.MultiplyAdd(Xf2, mat00, Fma.MultiplyAdd(Yf2, mat01, Fma.MultiplyAdd(Zf2, mat02, mat03)));
                 Vector128<float> X3 = Fma.MultiplyAdd(Xf3, mat00, Fma.MultiplyAdd(Yf3, mat01, Fma.MultiplyAdd(Zf3, mat02, mat03)));
 
-                Vector128<float> mat10 = V128.Create(mat1.GetElement(0));
-                Vector128<float> mat11 = V128.Create(mat1.GetElement(1));
-                Vector128<float> mat12 = V128.Create(mat1.GetElement(2));
-                Vector128<float> mat13 = V128.Create(mat1.GetElement(3));
+                Vector128<float> mat10 = V128Helper.PermuteFrom0(mat1);
+                Vector128<float> mat11 = V128Helper.PermuteFrom1(mat1);
+                Vector128<float> mat12 = V128Helper.PermuteFrom2(mat1);
+                Vector128<float> mat13 = V128Helper.PermuteFrom3(mat1);
 
                 Vector128<float> Y0 = Fma.MultiplyAdd(Xf0, mat10, Fma.MultiplyAdd(Yf0, mat11, Fma.MultiplyAdd(Zf0, mat12, mat13)));
                 Vector128<float> Y1 = Fma.MultiplyAdd(Xf1, mat10, Fma.MultiplyAdd(Yf1, mat11, Fma.MultiplyAdd(Zf1, mat12, mat13)));
                 Vector128<float> Y2 = Fma.MultiplyAdd(Xf2, mat10, Fma.MultiplyAdd(Yf2, mat11, Fma.MultiplyAdd(Zf2, mat12, mat13)));
                 Vector128<float> Y3 = Fma.MultiplyAdd(Xf3, mat10, Fma.MultiplyAdd(Yf3, mat11, Fma.MultiplyAdd(Zf3, mat12, mat13)));
 
-                Vector128<float> mat30 = V128.Create(mat3.GetElement(0));
-                Vector128<float> mat31 = V128.Create(mat3.GetElement(1));
-                Vector128<float> mat32 = V128.Create(mat3.GetElement(2));
-                Vector128<float> mat33 = V128.Create(mat3.GetElement(3));
+                Vector128<float> mat30 = V128Helper.PermuteFrom0(mat3);
+                Vector128<float> mat31 = V128Helper.PermuteFrom1(mat3);
+                Vector128<float> mat32 = V128Helper.PermuteFrom2(mat3);
+                Vector128<float> mat33 = V128Helper.PermuteFrom3(mat3);
 
                 Vector128<float> W0 = Fma.MultiplyAdd(Xf0, mat30, Fma.MultiplyAdd(Yf0, mat31, Fma.MultiplyAdd(Zf0, mat32, mat33)));
                 Vector128<float> W1 = Fma.MultiplyAdd(Xf1, mat30, Fma.MultiplyAdd(Yf1, mat31, Fma.MultiplyAdd(Zf1, mat32, mat33)));
