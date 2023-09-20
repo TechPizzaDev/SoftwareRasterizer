@@ -323,10 +323,10 @@ public static unsafe class Main
                     {
                         g_rasterizer = V128Rasterizer<FmaX86>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
                     }
-                    else if (previousRasterizer is V128Rasterizer<FmaIntrinsic> or V128Rasterizer<FmaX86>)
+                    /*else if (previousRasterizer is V128Rasterizer<FmaIntrinsic> or V128Rasterizer<FmaX86>)
                     {
                         g_rasterizer = ScalarRasterizer.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);
-                    }
+                    }*/
                     else
                     {
                         g_rasterizer = Avx2Rasterizer<FmaX86>.Create(g_rasterizationTable, WINDOW_WIDTH, WINDOW_HEIGHT);

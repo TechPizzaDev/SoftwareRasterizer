@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SoftwareRasterizer": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_EnableAVX512F": "0"
+      }
+    }
+  }
+}
