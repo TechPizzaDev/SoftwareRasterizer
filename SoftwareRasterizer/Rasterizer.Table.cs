@@ -6,11 +6,7 @@ using static PrimitiveMode;
 
 public abstract partial class Rasterizer
 {
-    // TODO: inline into Span getter on .NET8
-
-    protected static ReadOnlySpan<PrimitiveMode> modeTable => _modeTable;
-
-    private static readonly PrimitiveMode[] _modeTable = new PrimitiveMode[256] 
+    protected static ReadOnlySpan<PrimitiveMode> modeTable => new PrimitiveMode[256] 
     {
         Convex,        Triangle1,     ConcaveLeft,   Triangle1,     Triangle0,     Culled,        Triangle0,     Culled,
         ConcaveRight,  Triangle1,     Culled,        Triangle1,     Triangle0,     Culled,        Triangle0,     Culled,

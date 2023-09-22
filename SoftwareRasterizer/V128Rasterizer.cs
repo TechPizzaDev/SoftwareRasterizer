@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 
 namespace SoftwareRasterizer;
@@ -597,7 +598,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
             Vector128<int>* vertexPartData = vertexData + packetIdx * 2;
 
             int p0 = RenderPacketPart<T>(
-                mat0, 
+                mat0,
                 mat1,
                 mat3,
                 c0,
@@ -829,13 +830,13 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 V128.BitwiseOr(V128.ShiftRightLogical(wSign1.AsInt32(), 26), V128.ShiftRightLogical(wSign0.AsInt32(), 27))));
         }
 
-        fixed (PrimitiveMode* modeTablePtr = modeTable)
-        {
-            modeTableBuffer[0] = (int)modeTablePtr[config.GetElement(0)];
-            modeTableBuffer[1] = (int)modeTablePtr[config.GetElement(1)];
-            modeTableBuffer[2] = (int)modeTablePtr[config.GetElement(2)];
-            modeTableBuffer[3] = (int)modeTablePtr[config.GetElement(3)];
-        }
+        V128.StoreAligned(config, modeTableBuffer);
+
+        ref PrimitiveMode modeTablePtr = ref MemoryMarshal.GetReference(modeTable);
+        modeTableBuffer[0] = (int)Unsafe.Add(ref modeTablePtr, modeTableBuffer[0]);
+        modeTableBuffer[1] = (int)Unsafe.Add(ref modeTablePtr, modeTableBuffer[1]);
+        modeTableBuffer[2] = (int)Unsafe.Add(ref modeTablePtr, modeTableBuffer[2]);
+        modeTableBuffer[3] = (int)Unsafe.Add(ref modeTablePtr, modeTableBuffer[3]);
 
         Vector128<int> modes = V128.LoadAligned(modeTableBuffer);
         if (V128Helper.TestZ(modes, modes))

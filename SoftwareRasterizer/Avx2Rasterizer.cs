@@ -745,7 +745,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<int> modes;
             fixed (PrimitiveMode* modeTablePtr = modeTable)
             {
-                modes = Avx2.GatherVector256((int*)modeTablePtr, config, 4);
+                modes = Avx2.And(Avx2.GatherVector256((int*)modeTablePtr, config, 1), Vector256.Create(0xff));
             }
 
             if (Avx.TestZ(modes, modes))
