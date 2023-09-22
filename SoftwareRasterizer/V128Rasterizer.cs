@@ -594,458 +594,9 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
         for (uint packetIdx = 0; packetIdx < packetCount; packetIdx += 4)
         {
-            int RenderPacketPart(
-                Vector128<float> mat0,
-                Vector128<float> mat1,
-                Vector128<float> mat3,
-                float c0,
-                float c1,
-                Vector128<int>* vertexData,
-                uint* primModes,
-                uint* firstBlocks,
-                uint* rangesX,
-                uint* rangesY,
-                Vector128<float>* depthPlane,
-                Vector128<float>* edgeNormalsX,
-                Vector128<float>* edgeNormalsY,
-                Vector128<float>* edgeOffsets,
-                Vector128<int>* slopeLookups,
-                ushort* depthBounds,
-                int* modeTableBuffer,
-                out uint overlappedPrimitiveValidMask)
-            {
-                // Load data - only needed once per frame, so use streaming load
-                Vector128<int> I0 = V128.LoadAlignedNonTemporal((int*)(vertexData + 0));
-                Vector128<int> I1 = V128.LoadAlignedNonTemporal((int*)(vertexData + 2));
-                Vector128<int> I2 = V128.LoadAlignedNonTemporal((int*)(vertexData + 4));
-                Vector128<int> I3 = V128.LoadAlignedNonTemporal((int*)(vertexData + 6));
-
-                // Vertex transformation - first W, then X & Y after camera plane culling, then Z after backface culling
-                Vector128<float> Xf0 = V128.ConvertToSingle(I0);
-                Vector128<float> Xf1 = V128.ConvertToSingle(I1);
-                Vector128<float> Xf2 = V128.ConvertToSingle(I2);
-                Vector128<float> Xf3 = V128.ConvertToSingle(I3);
-
-                Vector128<int> maskY = V128.Create(2047 << 10);
-                Vector128<float> Yf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskY));
-                Vector128<float> Yf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskY));
-                Vector128<float> Yf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskY));
-                Vector128<float> Yf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskY));
-
-                Vector128<int> maskZ = V128.Create(1023);
-                Vector128<float> Zf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskZ));
-                Vector128<float> Zf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskZ));
-                Vector128<float> Zf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskZ));
-                Vector128<float> Zf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskZ));
-
-                Vector128<float> mat00 = V128Helper.PermuteFrom0(mat0);
-                Vector128<float> mat01 = V128Helper.PermuteFrom1(mat0);
-                Vector128<float> mat02 = V128Helper.PermuteFrom2(mat0);
-                Vector128<float> mat03 = V128Helper.PermuteFrom3(mat0);
-
-                Vector128<float> X0 = Fma.MultiplyAdd(Xf0, mat00, Fma.MultiplyAdd(Yf0, mat01, Fma.MultiplyAdd(Zf0, mat02, mat03)));
-                Vector128<float> X1 = Fma.MultiplyAdd(Xf1, mat00, Fma.MultiplyAdd(Yf1, mat01, Fma.MultiplyAdd(Zf1, mat02, mat03)));
-                Vector128<float> X2 = Fma.MultiplyAdd(Xf2, mat00, Fma.MultiplyAdd(Yf2, mat01, Fma.MultiplyAdd(Zf2, mat02, mat03)));
-                Vector128<float> X3 = Fma.MultiplyAdd(Xf3, mat00, Fma.MultiplyAdd(Yf3, mat01, Fma.MultiplyAdd(Zf3, mat02, mat03)));
-
-                Vector128<float> mat10 = V128Helper.PermuteFrom0(mat1);
-                Vector128<float> mat11 = V128Helper.PermuteFrom1(mat1);
-                Vector128<float> mat12 = V128Helper.PermuteFrom2(mat1);
-                Vector128<float> mat13 = V128Helper.PermuteFrom3(mat1);
-
-                Vector128<float> Y0 = Fma.MultiplyAdd(Xf0, mat10, Fma.MultiplyAdd(Yf0, mat11, Fma.MultiplyAdd(Zf0, mat12, mat13)));
-                Vector128<float> Y1 = Fma.MultiplyAdd(Xf1, mat10, Fma.MultiplyAdd(Yf1, mat11, Fma.MultiplyAdd(Zf1, mat12, mat13)));
-                Vector128<float> Y2 = Fma.MultiplyAdd(Xf2, mat10, Fma.MultiplyAdd(Yf2, mat11, Fma.MultiplyAdd(Zf2, mat12, mat13)));
-                Vector128<float> Y3 = Fma.MultiplyAdd(Xf3, mat10, Fma.MultiplyAdd(Yf3, mat11, Fma.MultiplyAdd(Zf3, mat12, mat13)));
-
-                Vector128<float> mat30 = V128Helper.PermuteFrom0(mat3);
-                Vector128<float> mat31 = V128Helper.PermuteFrom1(mat3);
-                Vector128<float> mat32 = V128Helper.PermuteFrom2(mat3);
-                Vector128<float> mat33 = V128Helper.PermuteFrom3(mat3);
-
-                Vector128<float> W0 = Fma.MultiplyAdd(Xf0, mat30, Fma.MultiplyAdd(Yf0, mat31, Fma.MultiplyAdd(Zf0, mat32, mat33)));
-                Vector128<float> W1 = Fma.MultiplyAdd(Xf1, mat30, Fma.MultiplyAdd(Yf1, mat31, Fma.MultiplyAdd(Zf1, mat32, mat33)));
-                Vector128<float> W2 = Fma.MultiplyAdd(Xf2, mat30, Fma.MultiplyAdd(Yf2, mat31, Fma.MultiplyAdd(Zf2, mat32, mat33)));
-                Vector128<float> W3 = Fma.MultiplyAdd(Xf3, mat30, Fma.MultiplyAdd(Yf3, mat31, Fma.MultiplyAdd(Zf3, mat32, mat33)));
-
-                Vector128<float> invW0, invW1, invW2, invW3;
-                // Clamp W and invert
-                if (T.PossiblyNearClipped)
-                {
-                    Vector128<float> lowerBound = V128.Create((float)-maxInvW);
-                    Vector128<float> upperBound = V128.Create((float)+maxInvW);
-                    invW0 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W0)));
-                    invW1 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W1)));
-                    invW2 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W2)));
-                    invW3 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W3)));
-                }
-                else
-                {
-                    invW0 = V128Helper.Reciprocal(W0);
-                    invW1 = V128Helper.Reciprocal(W1);
-                    invW2 = V128Helper.Reciprocal(W2);
-                    invW3 = V128Helper.Reciprocal(W3);
-                }
-
-                // Round to integer coordinates to improve culling of zero-area triangles
-                Vector128<float> roundFactor = V128.Create(0.125f);
-                Vector128<float> x0 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X0, invW0)), roundFactor);
-                Vector128<float> x1 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X1, invW1)), roundFactor);
-                Vector128<float> x2 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X2, invW2)), roundFactor);
-                Vector128<float> x3 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X3, invW3)), roundFactor);
-
-                Vector128<float> y0 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y0, invW0)), roundFactor);
-                Vector128<float> y1 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y1, invW1)), roundFactor);
-                Vector128<float> y2 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y2, invW2)), roundFactor);
-                Vector128<float> y3 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y3, invW3)), roundFactor);
-
-                // Compute unnormalized edge directions
-                Vector128<float> edgeNormalsX0 = V128.Subtract(y1, y0);
-                Vector128<float> edgeNormalsX1 = V128.Subtract(y2, y1);
-                Vector128<float> edgeNormalsX2 = V128.Subtract(y3, y2);
-                Vector128<float> edgeNormalsX3 = V128.Subtract(y0, y3);
-
-                Vector128<float> edgeNormalsY0 = V128.Subtract(x0, x1);
-                Vector128<float> edgeNormalsY1 = V128.Subtract(x1, x2);
-                Vector128<float> edgeNormalsY2 = V128.Subtract(x2, x3);
-                Vector128<float> edgeNormalsY3 = V128.Subtract(x3, x0);
-
-                Vector128<float> area0 = Fma.MultiplySubtract(edgeNormalsX0, edgeNormalsY1, V128.Multiply(edgeNormalsX1, edgeNormalsY0));
-                Vector128<float> area1 = Fma.MultiplySubtract(edgeNormalsX1, edgeNormalsY2, V128.Multiply(edgeNormalsX2, edgeNormalsY1));
-                Vector128<float> area2 = Fma.MultiplySubtract(edgeNormalsX2, edgeNormalsY3, V128.Multiply(edgeNormalsX3, edgeNormalsY2));
-                Vector128<float> area3 = V128.Subtract(V128.Add(area0, area2), area1);
-
-                Vector128<float> minusZero128 = V128.Create(-0.0f);
-
-                Vector128<float> wSign0, wSign1, wSign2, wSign3;
-                if (T.PossiblyNearClipped)
-                {
-                    wSign0 = V128.BitwiseAnd(invW0, minusZero128);
-                    wSign1 = V128.BitwiseAnd(invW1, minusZero128);
-                    wSign2 = V128.BitwiseAnd(invW2, minusZero128);
-                    wSign3 = V128.BitwiseAnd(invW3, minusZero128);
-                }
-                else
-                {
-                    wSign0 = Vector128<float>.Zero;
-                    wSign1 = Vector128<float>.Zero;
-                    wSign2 = Vector128<float>.Zero;
-                    wSign3 = Vector128<float>.Zero;
-                }
-
-                // Compute signs of areas. We treat 0 as negative as this allows treating primitives with zero area as backfacing.
-                Vector128<float> areaSign0, areaSign1, areaSign2, areaSign3;
-                if (T.PossiblyNearClipped)
-                {
-                    // Flip areas for each vertex with W < 0. This needs to be done before comparison against 0 rather than afterwards to make sure zero-are triangles are handled correctly.
-                    areaSign0 = V128.LessThanOrEqual(V128.Xor(V128.Xor(area0, wSign0), V128.Xor(wSign1, wSign2)), Vector128<float>.Zero);
-                    areaSign1 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(V128.Xor(V128.Xor(area1, wSign1), V128.Xor(wSign2, wSign3)), Vector128<float>.Zero));
-                    areaSign2 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(V128.Xor(V128.Xor(area2, wSign0), V128.Xor(wSign2, wSign3)), Vector128<float>.Zero));
-                    areaSign3 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(V128.Xor(V128.Xor(area3, wSign1), V128.Xor(wSign0, wSign3)), Vector128<float>.Zero));
-                }
-                else
-                {
-                    areaSign0 = V128.LessThanOrEqual(area0, Vector128<float>.Zero);
-                    areaSign1 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(area1, Vector128<float>.Zero));
-                    areaSign2 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(area2, Vector128<float>.Zero));
-                    areaSign3 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(area3, Vector128<float>.Zero));
-                }
-
-                Vector128<int> config = V128.BitwiseOr(
-                  V128.BitwiseOr(V128.ShiftRightLogical(areaSign3.AsInt32(), 28), V128.ShiftRightLogical(areaSign2.AsInt32(), 29)),
-                  V128.BitwiseOr(V128.ShiftRightLogical(areaSign1.AsInt32(), 30), V128.ShiftRightLogical(areaSign0.AsInt32(), 31)));
-
-                if (T.PossiblyNearClipped)
-                {
-                    config = V128.BitwiseOr(config,
-                      V128.BitwiseOr(
-                        V128.BitwiseOr(V128.ShiftRightLogical(wSign3.AsInt32(), 24), V128.ShiftRightLogical(wSign2.AsInt32(), 25)),
-                        V128.BitwiseOr(V128.ShiftRightLogical(wSign1.AsInt32(), 26), V128.ShiftRightLogical(wSign0.AsInt32(), 27))));
-                }
-
-                fixed (PrimitiveMode* modeTablePtr = modeTable)
-                {
-                    modeTableBuffer[0] = (int)modeTablePtr[config.GetElement(0)];
-                    modeTableBuffer[1] = (int)modeTablePtr[config.GetElement(1)];
-                    modeTableBuffer[2] = (int)modeTablePtr[config.GetElement(2)];
-                    modeTableBuffer[3] = (int)modeTablePtr[config.GetElement(3)];
-                }
-
-                Vector128<int> modes = V128.LoadAligned(modeTableBuffer);
-                if (V128Helper.TestZ(modes, modes))
-                {
-                    overlappedPrimitiveValidMask = 0;
-                    return 1;
-                }
-
-                Vector128<int> primitiveValid = V128.GreaterThan(modes, Vector128<int>.Zero);
-
-                V128.StoreAligned(modes, (int*)primModes);
-
-                Vector128<float> minFx, minFy, maxFx, maxFy;
-
-                if (T.PossiblyNearClipped)
-                {
-                    // Clipless bounding box computation
-                    Vector128<float> infP = V128.Create(+10000.0f);
-                    Vector128<float> infN = V128.Create(-10000.0f);
-
-                    // Find interval of points with W > 0
-                    Vector128<float> minPx0 = V128Helper.BlendVariable(x0, infP, wSign0);
-                    Vector128<float> minPx1 = V128Helper.BlendVariable(x1, infP, wSign1);
-                    Vector128<float> minPx2 = V128Helper.BlendVariable(x2, infP, wSign2);
-                    Vector128<float> minPx3 = V128Helper.BlendVariable(x3, infP, wSign3);
-
-                    Vector128<float> minPx = V128.Min(
-                      V128.Min(minPx0, minPx1),
-                      V128.Min(minPx2, minPx3));
-
-                    Vector128<float> minPy0 = V128Helper.BlendVariable(y0, infP, wSign0);
-                    Vector128<float> minPy1 = V128Helper.BlendVariable(y1, infP, wSign1);
-                    Vector128<float> minPy2 = V128Helper.BlendVariable(y2, infP, wSign2);
-                    Vector128<float> minPy3 = V128Helper.BlendVariable(y3, infP, wSign3);
-
-                    Vector128<float> minPy = V128.Min(
-                      V128.Min(minPy0, minPy1),
-                      V128.Min(minPy2, minPy3));
-
-                    Vector128<float> maxPx0 = V128.Xor(minPx0, wSign0);
-                    Vector128<float> maxPx1 = V128.Xor(minPx1, wSign1);
-                    Vector128<float> maxPx2 = V128.Xor(minPx2, wSign2);
-                    Vector128<float> maxPx3 = V128.Xor(minPx3, wSign3);
-
-                    Vector128<float> maxPx = V128.Max(
-                      V128.Max(maxPx0, maxPx1),
-                      V128.Max(maxPx2, maxPx3));
-
-                    Vector128<float> maxPy0 = V128.Xor(minPy0, wSign0);
-                    Vector128<float> maxPy1 = V128.Xor(minPy1, wSign1);
-                    Vector128<float> maxPy2 = V128.Xor(minPy2, wSign2);
-                    Vector128<float> maxPy3 = V128.Xor(minPy3, wSign3);
-
-                    Vector128<float> maxPy = V128.Max(
-                      V128.Max(maxPy0, maxPy1),
-                      V128.Max(maxPy2, maxPy3));
-
-                    // Find interval of points with W < 0
-                    Vector128<float> minNx0 = V128Helper.BlendVariable(infP, x0, wSign0);
-                    Vector128<float> minNx1 = V128Helper.BlendVariable(infP, x1, wSign1);
-                    Vector128<float> minNx2 = V128Helper.BlendVariable(infP, x2, wSign2);
-                    Vector128<float> minNx3 = V128Helper.BlendVariable(infP, x3, wSign3);
-
-                    Vector128<float> minNx = V128.Min(
-                      V128.Min(minNx0, minNx1),
-                      V128.Min(minNx2, minNx3));
-
-                    Vector128<float> minNy0 = V128Helper.BlendVariable(infP, y0, wSign0);
-                    Vector128<float> minNy1 = V128Helper.BlendVariable(infP, y1, wSign1);
-                    Vector128<float> minNy2 = V128Helper.BlendVariable(infP, y2, wSign2);
-                    Vector128<float> minNy3 = V128Helper.BlendVariable(infP, y3, wSign3);
-
-                    Vector128<float> minNy = V128.Min(
-                      V128.Min(minNy0, minNy1),
-                      V128.Min(minNy2, minNy3));
-
-                    Vector128<float> maxNx0 = V128Helper.BlendVariable(infN, x0, wSign0);
-                    Vector128<float> maxNx1 = V128Helper.BlendVariable(infN, x1, wSign1);
-                    Vector128<float> maxNx2 = V128Helper.BlendVariable(infN, x2, wSign2);
-                    Vector128<float> maxNx3 = V128Helper.BlendVariable(infN, x3, wSign3);
-
-                    Vector128<float> maxNx = V128.Max(
-                      V128.Max(maxNx0, maxNx1),
-                      V128.Max(maxNx2, maxNx3));
-
-                    Vector128<float> maxNy0 = V128Helper.BlendVariable(infN, y0, wSign0);
-                    Vector128<float> maxNy1 = V128Helper.BlendVariable(infN, y1, wSign1);
-                    Vector128<float> maxNy2 = V128Helper.BlendVariable(infN, y2, wSign2);
-                    Vector128<float> maxNy3 = V128Helper.BlendVariable(infN, y3, wSign3);
-
-                    Vector128<float> maxNy = V128.Max(
-                      V128.Max(maxNy0, maxNy1),
-                      V128.Max(maxNy2, maxNy3));
-
-                    // Include interval bounds resp. infinity depending on ordering of intervals
-                    Vector128<float> incAx = V128Helper.BlendVariable(minPx, infN, V128.GreaterThan(maxNx, minPx));
-                    Vector128<float> incAy = V128Helper.BlendVariable(minPy, infN, V128.GreaterThan(maxNy, minPy));
-
-                    Vector128<float> incBx = V128Helper.BlendVariable(maxPx, infP, V128.GreaterThan(maxPx, minNx));
-                    Vector128<float> incBy = V128Helper.BlendVariable(maxPy, infP, V128.GreaterThan(maxPy, minNy));
-
-                    minFx = V128.Min(incAx, incBx);
-                    minFy = V128.Min(incAy, incBy);
-
-                    maxFx = V128.Max(incAx, incBx);
-                    maxFy = V128.Max(incAy, incBy);
-                }
-                else
-                {
-                    // Standard bounding box inclusion
-                    minFx = V128.Min(V128.Min(x0, x1), V128.Min(x2, x3));
-                    minFy = V128.Min(V128.Min(y0, y1), V128.Min(y2, y3));
-
-                    maxFx = V128.Max(V128.Max(x0, x1), V128.Max(x2, x3));
-                    maxFy = V128.Max(V128.Max(y0, y1), V128.Max(y2, y3));
-                }
-
-                // Clamp and round
-                Vector128<int> minX, minY, maxX, maxY;
-                minX = V128.Max(V128.ConvertToInt32(V128.Add(minFx, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
-                minY = V128.Max(V128.ConvertToInt32(V128.Add(minFy, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
-                maxX = V128.Min(V128.ConvertToInt32(V128.Add(maxFx, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksX));
-                maxY = V128.Min(V128.ConvertToInt32(V128.Add(maxFy, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksY));
-
-                // Check overlap between bounding box and frustum
-                Vector128<int> inFrustum = V128.BitwiseAnd(V128.GreaterThan(maxX, minX), V128.GreaterThan(maxY, minY));
-                Vector128<int> overlappedPrimitiveValid = V128.BitwiseAnd(inFrustum, primitiveValid);
-
-                if (V128Helper.TestZ(overlappedPrimitiveValid, overlappedPrimitiveValid))
-                {
-                    overlappedPrimitiveValidMask = 0;
-                    return 2;
-                }
-
-                overlappedPrimitiveValidMask = V128.ExtractMostSignificantBits(overlappedPrimitiveValid.AsSingle());
-
-                // Convert bounds from [min, max] to [min, range]
-                Vector128<int> rangeX = V128.Subtract(maxX, minX);
-                Vector128<int> rangeY = V128.Subtract(maxY, minY);
-
-                // Compute Z from linear relation with 1/W
-                Vector128<float> C0 = V128.Create(c0);
-                Vector128<float> C1 = V128.Create(c1);
-                Vector128<float> z0, z1, z2, z3;
-                z0 = Fma.MultiplyAdd(invW0, C1, C0);
-                z1 = Fma.MultiplyAdd(invW1, C1, C0);
-                z2 = Fma.MultiplyAdd(invW2, C1, C0);
-                z3 = Fma.MultiplyAdd(invW3, C1, C0);
-
-                Vector128<float> maxZ = V128.Max(V128.Max(z0, z1), V128.Max(z2, z3));
-
-                // If any W < 0, assume maxZ = 1 (effectively disabling Hi-Z)
-                if (T.PossiblyNearClipped)
-                {
-                    maxZ = V128Helper.BlendVariable(maxZ, V128.Create(1.0f), V128.BitwiseOr(V128.BitwiseOr(wSign0, wSign1), V128.BitwiseOr(wSign2, wSign3)));
-                }
-
-                Vector64<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
-
-                Vector64.Store(packedDepthBounds, depthBounds);
-
-                // Compute screen space depth plane
-                Vector128<float> greaterArea = V128.LessThan(V128.AndNot(area0, minusZero128), V128.AndNot(area2, minusZero128));
-
-                // Force triangle area to be picked in the relevant mode.
-                Vector128<float> modeTriangle0 = V128.Equals(modes, V128.Create((int)PrimitiveMode.Triangle0)).AsSingle();
-                Vector128<float> modeTriangle1 = V128.Equals(modes, V128.Create((int)PrimitiveMode.Triangle1)).AsSingle();
-                greaterArea = V128.AndNot(V128.BitwiseOr(modeTriangle1, greaterArea), modeTriangle0);
-
-                Vector128<float> invArea;
-                if (T.PossiblyNearClipped)
-                {
-                    // Do a precise divison to reduce error in depth plane. Note that the area computed here
-                    // differs from the rasterized region if W < 0, so it can be very small for large covered screen regions.
-                    invArea = V128.Divide(V128.Create(1.0f), V128Helper.BlendVariable(area0, area2, greaterArea));
-                }
-                else
-                {
-                    invArea = V128Helper.Reciprocal(V128Helper.BlendVariable(area0, area2, greaterArea));
-                }
-
-                Vector128<float> z12 = V128.Subtract(z1, z2);
-                Vector128<float> z20 = V128.Subtract(z2, z0);
-                Vector128<float> z30 = V128.Subtract(z3, z0);
-
-                Vector128<float> edgeNormalsX4 = V128.Subtract(y0, y2);
-                Vector128<float> edgeNormalsY4 = V128.Subtract(x2, x0);
-
-                Vector128<float> depthPlane0, depthPlane1, depthPlane2;
-                depthPlane1 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, V128.Multiply(z12, edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, V128.Multiply(z30, edgeNormalsX4)), greaterArea));
-                depthPlane2 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, V128.Multiply(z12, edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, V128.Multiply(z30, edgeNormalsY4)), greaterArea));
-
-                x0 = V128.Subtract(x0, V128.ConvertToSingle(minX));
-                y0 = V128.Subtract(y0, V128.ConvertToSingle(minY));
-
-                depthPlane0 = Fma.MultiplyAddNegated(x0, depthPlane1, Fma.MultiplyAddNegated(y0, depthPlane2, z0));
-
-                // If mode == Triangle0, replace edge 2 with edge 4; if mode == Triangle1, replace edge 0 with edge 4
-                edgeNormalsX2 = V128Helper.BlendVariable(edgeNormalsX2, edgeNormalsX4, modeTriangle0);
-                edgeNormalsY2 = V128Helper.BlendVariable(edgeNormalsY2, edgeNormalsY4, modeTriangle0);
-                edgeNormalsX0 = V128Helper.BlendVariable(edgeNormalsX0, V128.Xor(minusZero128, edgeNormalsX4), modeTriangle1);
-                edgeNormalsY0 = V128Helper.BlendVariable(edgeNormalsY0, V128.Xor(minusZero128, edgeNormalsY4), modeTriangle1);
-
-                const float maxOffset = -minEdgeOffset;
-                Vector128<float> edgeFactor = V128.Create((OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
-
-                // Flip edges if W < 0
-                Vector128<float> edgeFlipMask0, edgeFlipMask1, edgeFlipMask2, edgeFlipMask3;
-                if (T.PossiblyNearClipped)
-                {
-                    edgeFlipMask0 = V128.Xor(edgeFactor, V128.Xor(wSign0, V128Helper.BlendVariable(wSign1, wSign2, modeTriangle1)));
-                    edgeFlipMask1 = V128.Xor(edgeFactor, V128.Xor(wSign1, wSign2));
-                    edgeFlipMask2 = V128.Xor(edgeFactor, V128.Xor(wSign2, V128Helper.BlendVariable(wSign3, wSign0, modeTriangle0)));
-                    edgeFlipMask3 = V128.Xor(edgeFactor, V128.Xor(wSign0, wSign3));
-                }
-                else
-                {
-                    edgeFlipMask0 = edgeFactor;
-                    edgeFlipMask1 = edgeFactor;
-                    edgeFlipMask2 = edgeFactor;
-                    edgeFlipMask3 = edgeFactor;
-                }
-
-                // Normalize edge equations for lookup
-                normalizeEdge(ref edgeNormalsX0, ref edgeNormalsY0, edgeFlipMask0);
-                normalizeEdge(ref edgeNormalsX1, ref edgeNormalsY1, edgeFlipMask1);
-                normalizeEdge(ref edgeNormalsX2, ref edgeNormalsY2, edgeFlipMask2);
-                normalizeEdge(ref edgeNormalsX3, ref edgeNormalsY3, edgeFlipMask3);
-
-                Vector128<float> add128 = V128.Create(0.5f - minEdgeOffset * (OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
-                Vector128<float> edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3;
-
-                edgeOffsets0 = Fma.MultiplyAddNegated(x0, edgeNormalsX0, Fma.MultiplyAddNegated(y0, edgeNormalsY0, add128));
-                edgeOffsets1 = Fma.MultiplyAddNegated(x1, edgeNormalsX1, Fma.MultiplyAddNegated(y1, edgeNormalsY1, add128));
-                edgeOffsets2 = Fma.MultiplyAddNegated(x2, edgeNormalsX2, Fma.MultiplyAddNegated(y2, edgeNormalsY2, add128));
-                edgeOffsets3 = Fma.MultiplyAddNegated(x3, edgeNormalsX3, Fma.MultiplyAddNegated(y3, edgeNormalsY3, add128));
-
-                edgeOffsets1 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX1, edgeOffsets1);
-                edgeOffsets2 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX2, edgeOffsets2);
-                edgeOffsets3 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX3, edgeOffsets3);
-
-                edgeOffsets1 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY1, edgeOffsets1);
-                edgeOffsets2 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY2, edgeOffsets2);
-                edgeOffsets3 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY3, edgeOffsets3);
-
-                // Quantize slopes
-                Vector128<int> slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);
-                Vector128<int> slopeLookups1 = quantizeSlopeLookup(edgeNormalsX1, edgeNormalsY1);
-                Vector128<int> slopeLookups2 = quantizeSlopeLookup(edgeNormalsX2, edgeNormalsY2);
-                Vector128<int> slopeLookups3 = quantizeSlopeLookup(edgeNormalsX3, edgeNormalsY3);
-
-                Vector128<int> firstBlockIdx = V128.Add(V128.Multiply(minY.AsInt16(), V128.Create((int)m_blocksX).AsInt16()).AsInt32(), minX);
-
-                V128.StoreAligned(firstBlockIdx, (int*)firstBlocks);
-
-                V128.StoreAligned(rangeX, (int*)rangesX);
-
-                V128.StoreAligned(rangeY, (int*)rangesY);
-
-                // Transpose into AoS
-                transpose256(depthPlane0, depthPlane1, depthPlane2, Vector128<float>.Zero, depthPlane);
-
-                transpose256(edgeNormalsX0, edgeNormalsX1, edgeNormalsX2, edgeNormalsX3, edgeNormalsX);
-
-                transpose256(edgeNormalsY0, edgeNormalsY1, edgeNormalsY2, edgeNormalsY3, edgeNormalsY);
-
-                transpose256(edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3, edgeOffsets);
-
-                transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, slopeLookups);
-
-                return 0;
-            }
-
             Vector128<int>* vertexPartData = vertexData + packetIdx * 2;
 
-            int p0 = RenderPacketPart(
+            int p0 = RenderPacketPart<T>(
                 mat0, 
                 mat1,
                 mat3,
@@ -1065,7 +616,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 modeTableBuffer,
                 out uint validMask0);
 
-            int p1 = RenderPacketPart(
+            int p1 = RenderPacketPart<T>(
                 mat0,
                 mat1,
                 mat3,
@@ -1106,6 +657,456 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 primModes,
                 T.PossiblyNearClipped);
         }
+    }
+
+    private int RenderPacketPart<T>(
+        Vector128<float> mat0,
+        Vector128<float> mat1,
+        Vector128<float> mat3,
+        float c0,
+        float c1,
+        Vector128<int>* vertexData,
+        uint* primModes,
+        uint* firstBlocks,
+        uint* rangesX,
+        uint* rangesY,
+        Vector128<float>* depthPlane,
+        Vector128<float>* edgeNormalsX,
+        Vector128<float>* edgeNormalsY,
+        Vector128<float>* edgeOffsets,
+        Vector128<int>* slopeLookups,
+        ushort* depthBounds,
+        int* modeTableBuffer,
+        out uint overlappedPrimitiveValidMask)
+        where T : IPossiblyNearClipped
+    {
+        // Load data - only needed once per frame, so use streaming load
+        Vector128<int> I0 = V128.LoadAlignedNonTemporal((int*)(vertexData + 0));
+        Vector128<int> I1 = V128.LoadAlignedNonTemporal((int*)(vertexData + 2));
+        Vector128<int> I2 = V128.LoadAlignedNonTemporal((int*)(vertexData + 4));
+        Vector128<int> I3 = V128.LoadAlignedNonTemporal((int*)(vertexData + 6));
+
+        // Vertex transformation - first W, then X & Y after camera plane culling, then Z after backface culling
+        Vector128<float> Xf0 = V128.ConvertToSingle(I0);
+        Vector128<float> Xf1 = V128.ConvertToSingle(I1);
+        Vector128<float> Xf2 = V128.ConvertToSingle(I2);
+        Vector128<float> Xf3 = V128.ConvertToSingle(I3);
+
+        Vector128<int> maskY = V128.Create(2047 << 10);
+        Vector128<float> Yf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskY));
+        Vector128<float> Yf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskY));
+        Vector128<float> Yf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskY));
+        Vector128<float> Yf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskY));
+
+        Vector128<int> maskZ = V128.Create(1023);
+        Vector128<float> Zf0 = V128.ConvertToSingle(V128.BitwiseAnd(I0, maskZ));
+        Vector128<float> Zf1 = V128.ConvertToSingle(V128.BitwiseAnd(I1, maskZ));
+        Vector128<float> Zf2 = V128.ConvertToSingle(V128.BitwiseAnd(I2, maskZ));
+        Vector128<float> Zf3 = V128.ConvertToSingle(V128.BitwiseAnd(I3, maskZ));
+
+        Vector128<float> mat00 = V128Helper.PermuteFrom0(mat0);
+        Vector128<float> mat01 = V128Helper.PermuteFrom1(mat0);
+        Vector128<float> mat02 = V128Helper.PermuteFrom2(mat0);
+        Vector128<float> mat03 = V128Helper.PermuteFrom3(mat0);
+
+        Vector128<float> X0 = Fma.MultiplyAdd(Xf0, mat00, Fma.MultiplyAdd(Yf0, mat01, Fma.MultiplyAdd(Zf0, mat02, mat03)));
+        Vector128<float> X1 = Fma.MultiplyAdd(Xf1, mat00, Fma.MultiplyAdd(Yf1, mat01, Fma.MultiplyAdd(Zf1, mat02, mat03)));
+        Vector128<float> X2 = Fma.MultiplyAdd(Xf2, mat00, Fma.MultiplyAdd(Yf2, mat01, Fma.MultiplyAdd(Zf2, mat02, mat03)));
+        Vector128<float> X3 = Fma.MultiplyAdd(Xf3, mat00, Fma.MultiplyAdd(Yf3, mat01, Fma.MultiplyAdd(Zf3, mat02, mat03)));
+
+        Vector128<float> mat10 = V128Helper.PermuteFrom0(mat1);
+        Vector128<float> mat11 = V128Helper.PermuteFrom1(mat1);
+        Vector128<float> mat12 = V128Helper.PermuteFrom2(mat1);
+        Vector128<float> mat13 = V128Helper.PermuteFrom3(mat1);
+
+        Vector128<float> Y0 = Fma.MultiplyAdd(Xf0, mat10, Fma.MultiplyAdd(Yf0, mat11, Fma.MultiplyAdd(Zf0, mat12, mat13)));
+        Vector128<float> Y1 = Fma.MultiplyAdd(Xf1, mat10, Fma.MultiplyAdd(Yf1, mat11, Fma.MultiplyAdd(Zf1, mat12, mat13)));
+        Vector128<float> Y2 = Fma.MultiplyAdd(Xf2, mat10, Fma.MultiplyAdd(Yf2, mat11, Fma.MultiplyAdd(Zf2, mat12, mat13)));
+        Vector128<float> Y3 = Fma.MultiplyAdd(Xf3, mat10, Fma.MultiplyAdd(Yf3, mat11, Fma.MultiplyAdd(Zf3, mat12, mat13)));
+
+        Vector128<float> mat30 = V128Helper.PermuteFrom0(mat3);
+        Vector128<float> mat31 = V128Helper.PermuteFrom1(mat3);
+        Vector128<float> mat32 = V128Helper.PermuteFrom2(mat3);
+        Vector128<float> mat33 = V128Helper.PermuteFrom3(mat3);
+
+        Vector128<float> W0 = Fma.MultiplyAdd(Xf0, mat30, Fma.MultiplyAdd(Yf0, mat31, Fma.MultiplyAdd(Zf0, mat32, mat33)));
+        Vector128<float> W1 = Fma.MultiplyAdd(Xf1, mat30, Fma.MultiplyAdd(Yf1, mat31, Fma.MultiplyAdd(Zf1, mat32, mat33)));
+        Vector128<float> W2 = Fma.MultiplyAdd(Xf2, mat30, Fma.MultiplyAdd(Yf2, mat31, Fma.MultiplyAdd(Zf2, mat32, mat33)));
+        Vector128<float> W3 = Fma.MultiplyAdd(Xf3, mat30, Fma.MultiplyAdd(Yf3, mat31, Fma.MultiplyAdd(Zf3, mat32, mat33)));
+
+        Vector128<float> invW0, invW1, invW2, invW3;
+        // Clamp W and invert
+        if (T.PossiblyNearClipped)
+        {
+            Vector128<float> lowerBound = V128.Create((float)-maxInvW);
+            Vector128<float> upperBound = V128.Create((float)+maxInvW);
+            invW0 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W0)));
+            invW1 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W1)));
+            invW2 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W2)));
+            invW3 = V128.Min(upperBound, V128.Max(lowerBound, V128Helper.Reciprocal(W3)));
+        }
+        else
+        {
+            invW0 = V128Helper.Reciprocal(W0);
+            invW1 = V128Helper.Reciprocal(W1);
+            invW2 = V128Helper.Reciprocal(W2);
+            invW3 = V128Helper.Reciprocal(W3);
+        }
+
+        // Round to integer coordinates to improve culling of zero-area triangles
+        Vector128<float> roundFactor = V128.Create(0.125f);
+        Vector128<float> x0 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X0, invW0)), roundFactor);
+        Vector128<float> x1 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X1, invW1)), roundFactor);
+        Vector128<float> x2 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X2, invW2)), roundFactor);
+        Vector128<float> x3 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(X3, invW3)), roundFactor);
+
+        Vector128<float> y0 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y0, invW0)), roundFactor);
+        Vector128<float> y1 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y1, invW1)), roundFactor);
+        Vector128<float> y2 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y2, invW2)), roundFactor);
+        Vector128<float> y3 = V128.Multiply(V128Helper.RoundToNearestInteger(V128.Multiply(Y3, invW3)), roundFactor);
+
+        // Compute unnormalized edge directions
+        Vector128<float> edgeNormalsX0 = V128.Subtract(y1, y0);
+        Vector128<float> edgeNormalsX1 = V128.Subtract(y2, y1);
+        Vector128<float> edgeNormalsX2 = V128.Subtract(y3, y2);
+        Vector128<float> edgeNormalsX3 = V128.Subtract(y0, y3);
+
+        Vector128<float> edgeNormalsY0 = V128.Subtract(x0, x1);
+        Vector128<float> edgeNormalsY1 = V128.Subtract(x1, x2);
+        Vector128<float> edgeNormalsY2 = V128.Subtract(x2, x3);
+        Vector128<float> edgeNormalsY3 = V128.Subtract(x3, x0);
+
+        Vector128<float> area0 = Fma.MultiplySubtract(edgeNormalsX0, edgeNormalsY1, V128.Multiply(edgeNormalsX1, edgeNormalsY0));
+        Vector128<float> area1 = Fma.MultiplySubtract(edgeNormalsX1, edgeNormalsY2, V128.Multiply(edgeNormalsX2, edgeNormalsY1));
+        Vector128<float> area2 = Fma.MultiplySubtract(edgeNormalsX2, edgeNormalsY3, V128.Multiply(edgeNormalsX3, edgeNormalsY2));
+        Vector128<float> area3 = V128.Subtract(V128.Add(area0, area2), area1);
+
+        Vector128<float> minusZero128 = V128.Create(-0.0f);
+
+        Vector128<float> wSign0, wSign1, wSign2, wSign3;
+        if (T.PossiblyNearClipped)
+        {
+            wSign0 = V128.BitwiseAnd(invW0, minusZero128);
+            wSign1 = V128.BitwiseAnd(invW1, minusZero128);
+            wSign2 = V128.BitwiseAnd(invW2, minusZero128);
+            wSign3 = V128.BitwiseAnd(invW3, minusZero128);
+        }
+        else
+        {
+            wSign0 = Vector128<float>.Zero;
+            wSign1 = Vector128<float>.Zero;
+            wSign2 = Vector128<float>.Zero;
+            wSign3 = Vector128<float>.Zero;
+        }
+
+        // Compute signs of areas. We treat 0 as negative as this allows treating primitives with zero area as backfacing.
+        Vector128<float> areaSign0, areaSign1, areaSign2, areaSign3;
+        if (T.PossiblyNearClipped)
+        {
+            // Flip areas for each vertex with W < 0. This needs to be done before comparison against 0 rather than afterwards to make sure zero-are triangles are handled correctly.
+            areaSign0 = V128.LessThanOrEqual(V128.Xor(V128.Xor(area0, wSign0), V128.Xor(wSign1, wSign2)), Vector128<float>.Zero);
+            areaSign1 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(V128.Xor(V128.Xor(area1, wSign1), V128.Xor(wSign2, wSign3)), Vector128<float>.Zero));
+            areaSign2 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(V128.Xor(V128.Xor(area2, wSign0), V128.Xor(wSign2, wSign3)), Vector128<float>.Zero));
+            areaSign3 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(V128.Xor(V128.Xor(area3, wSign1), V128.Xor(wSign0, wSign3)), Vector128<float>.Zero));
+        }
+        else
+        {
+            areaSign0 = V128.LessThanOrEqual(area0, Vector128<float>.Zero);
+            areaSign1 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(area1, Vector128<float>.Zero));
+            areaSign2 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(area2, Vector128<float>.Zero));
+            areaSign3 = V128.BitwiseAnd(minusZero128, V128.LessThanOrEqual(area3, Vector128<float>.Zero));
+        }
+
+        Vector128<int> config = V128.BitwiseOr(
+          V128.BitwiseOr(V128.ShiftRightLogical(areaSign3.AsInt32(), 28), V128.ShiftRightLogical(areaSign2.AsInt32(), 29)),
+          V128.BitwiseOr(V128.ShiftRightLogical(areaSign1.AsInt32(), 30), V128.ShiftRightLogical(areaSign0.AsInt32(), 31)));
+
+        if (T.PossiblyNearClipped)
+        {
+            config = V128.BitwiseOr(config,
+              V128.BitwiseOr(
+                V128.BitwiseOr(V128.ShiftRightLogical(wSign3.AsInt32(), 24), V128.ShiftRightLogical(wSign2.AsInt32(), 25)),
+                V128.BitwiseOr(V128.ShiftRightLogical(wSign1.AsInt32(), 26), V128.ShiftRightLogical(wSign0.AsInt32(), 27))));
+        }
+
+        fixed (PrimitiveMode* modeTablePtr = modeTable)
+        {
+            modeTableBuffer[0] = (int)modeTablePtr[config.GetElement(0)];
+            modeTableBuffer[1] = (int)modeTablePtr[config.GetElement(1)];
+            modeTableBuffer[2] = (int)modeTablePtr[config.GetElement(2)];
+            modeTableBuffer[3] = (int)modeTablePtr[config.GetElement(3)];
+        }
+
+        Vector128<int> modes = V128.LoadAligned(modeTableBuffer);
+        if (V128Helper.TestZ(modes, modes))
+        {
+            overlappedPrimitiveValidMask = 0;
+            return 1;
+        }
+
+        Vector128<int> primitiveValid = V128.GreaterThan(modes, Vector128<int>.Zero);
+
+        V128.StoreAligned(modes, (int*)primModes);
+
+        Vector128<float> minFx, minFy, maxFx, maxFy;
+
+        if (T.PossiblyNearClipped)
+        {
+            // Clipless bounding box computation
+            Vector128<float> infP = V128.Create(+10000.0f);
+            Vector128<float> infN = V128.Create(-10000.0f);
+
+            // Find interval of points with W > 0
+            Vector128<float> minPx0 = V128Helper.BlendVariable(x0, infP, wSign0);
+            Vector128<float> minPx1 = V128Helper.BlendVariable(x1, infP, wSign1);
+            Vector128<float> minPx2 = V128Helper.BlendVariable(x2, infP, wSign2);
+            Vector128<float> minPx3 = V128Helper.BlendVariable(x3, infP, wSign3);
+
+            Vector128<float> minPx = V128.Min(
+              V128.Min(minPx0, minPx1),
+              V128.Min(minPx2, minPx3));
+
+            Vector128<float> minPy0 = V128Helper.BlendVariable(y0, infP, wSign0);
+            Vector128<float> minPy1 = V128Helper.BlendVariable(y1, infP, wSign1);
+            Vector128<float> minPy2 = V128Helper.BlendVariable(y2, infP, wSign2);
+            Vector128<float> minPy3 = V128Helper.BlendVariable(y3, infP, wSign3);
+
+            Vector128<float> minPy = V128.Min(
+              V128.Min(minPy0, minPy1),
+              V128.Min(minPy2, minPy3));
+
+            Vector128<float> maxPx0 = V128.Xor(minPx0, wSign0);
+            Vector128<float> maxPx1 = V128.Xor(minPx1, wSign1);
+            Vector128<float> maxPx2 = V128.Xor(minPx2, wSign2);
+            Vector128<float> maxPx3 = V128.Xor(minPx3, wSign3);
+
+            Vector128<float> maxPx = V128.Max(
+              V128.Max(maxPx0, maxPx1),
+              V128.Max(maxPx2, maxPx3));
+
+            Vector128<float> maxPy0 = V128.Xor(minPy0, wSign0);
+            Vector128<float> maxPy1 = V128.Xor(minPy1, wSign1);
+            Vector128<float> maxPy2 = V128.Xor(minPy2, wSign2);
+            Vector128<float> maxPy3 = V128.Xor(minPy3, wSign3);
+
+            Vector128<float> maxPy = V128.Max(
+              V128.Max(maxPy0, maxPy1),
+              V128.Max(maxPy2, maxPy3));
+
+            // Find interval of points with W < 0
+            Vector128<float> minNx0 = V128Helper.BlendVariable(infP, x0, wSign0);
+            Vector128<float> minNx1 = V128Helper.BlendVariable(infP, x1, wSign1);
+            Vector128<float> minNx2 = V128Helper.BlendVariable(infP, x2, wSign2);
+            Vector128<float> minNx3 = V128Helper.BlendVariable(infP, x3, wSign3);
+
+            Vector128<float> minNx = V128.Min(
+              V128.Min(minNx0, minNx1),
+              V128.Min(minNx2, minNx3));
+
+            Vector128<float> minNy0 = V128Helper.BlendVariable(infP, y0, wSign0);
+            Vector128<float> minNy1 = V128Helper.BlendVariable(infP, y1, wSign1);
+            Vector128<float> minNy2 = V128Helper.BlendVariable(infP, y2, wSign2);
+            Vector128<float> minNy3 = V128Helper.BlendVariable(infP, y3, wSign3);
+
+            Vector128<float> minNy = V128.Min(
+              V128.Min(minNy0, minNy1),
+              V128.Min(minNy2, minNy3));
+
+            Vector128<float> maxNx0 = V128Helper.BlendVariable(infN, x0, wSign0);
+            Vector128<float> maxNx1 = V128Helper.BlendVariable(infN, x1, wSign1);
+            Vector128<float> maxNx2 = V128Helper.BlendVariable(infN, x2, wSign2);
+            Vector128<float> maxNx3 = V128Helper.BlendVariable(infN, x3, wSign3);
+
+            Vector128<float> maxNx = V128.Max(
+              V128.Max(maxNx0, maxNx1),
+              V128.Max(maxNx2, maxNx3));
+
+            Vector128<float> maxNy0 = V128Helper.BlendVariable(infN, y0, wSign0);
+            Vector128<float> maxNy1 = V128Helper.BlendVariable(infN, y1, wSign1);
+            Vector128<float> maxNy2 = V128Helper.BlendVariable(infN, y2, wSign2);
+            Vector128<float> maxNy3 = V128Helper.BlendVariable(infN, y3, wSign3);
+
+            Vector128<float> maxNy = V128.Max(
+              V128.Max(maxNy0, maxNy1),
+              V128.Max(maxNy2, maxNy3));
+
+            // Include interval bounds resp. infinity depending on ordering of intervals
+            Vector128<float> incAx = V128Helper.BlendVariable(minPx, infN, V128.GreaterThan(maxNx, minPx));
+            Vector128<float> incAy = V128Helper.BlendVariable(minPy, infN, V128.GreaterThan(maxNy, minPy));
+
+            Vector128<float> incBx = V128Helper.BlendVariable(maxPx, infP, V128.GreaterThan(maxPx, minNx));
+            Vector128<float> incBy = V128Helper.BlendVariable(maxPy, infP, V128.GreaterThan(maxPy, minNy));
+
+            minFx = V128.Min(incAx, incBx);
+            minFy = V128.Min(incAy, incBy);
+
+            maxFx = V128.Max(incAx, incBx);
+            maxFy = V128.Max(incAy, incBy);
+        }
+        else
+        {
+            // Standard bounding box inclusion
+            minFx = V128.Min(V128.Min(x0, x1), V128.Min(x2, x3));
+            minFy = V128.Min(V128.Min(y0, y1), V128.Min(y2, y3));
+
+            maxFx = V128.Max(V128.Max(x0, x1), V128.Max(x2, x3));
+            maxFy = V128.Max(V128.Max(y0, y1), V128.Max(y2, y3));
+        }
+
+        // Clamp and round
+        Vector128<int> minX, minY, maxX, maxY;
+        minX = V128.Max(V128.ConvertToInt32(V128.Add(minFx, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
+        minY = V128.Max(V128.ConvertToInt32(V128.Add(minFy, V128.Create(4.9999f / 8.0f))), Vector128<int>.Zero);
+        maxX = V128.Min(V128.ConvertToInt32(V128.Add(maxFx, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksX));
+        maxY = V128.Min(V128.ConvertToInt32(V128.Add(maxFy, V128.Create(11.0f / 8.0f))), V128.Create((int)m_blocksY));
+
+        // Check overlap between bounding box and frustum
+        Vector128<int> inFrustum = V128.BitwiseAnd(V128.GreaterThan(maxX, minX), V128.GreaterThan(maxY, minY));
+        Vector128<int> overlappedPrimitiveValid = V128.BitwiseAnd(inFrustum, primitiveValid);
+
+        if (V128Helper.TestZ(overlappedPrimitiveValid, overlappedPrimitiveValid))
+        {
+            overlappedPrimitiveValidMask = 0;
+            return 2;
+        }
+
+        overlappedPrimitiveValidMask = V128.ExtractMostSignificantBits(overlappedPrimitiveValid.AsSingle());
+
+        // Convert bounds from [min, max] to [min, range]
+        Vector128<int> rangeX = V128.Subtract(maxX, minX);
+        Vector128<int> rangeY = V128.Subtract(maxY, minY);
+
+        // Compute Z from linear relation with 1/W
+        Vector128<float> C0 = V128.Create(c0);
+        Vector128<float> C1 = V128.Create(c1);
+        Vector128<float> z0, z1, z2, z3;
+        z0 = Fma.MultiplyAdd(invW0, C1, C0);
+        z1 = Fma.MultiplyAdd(invW1, C1, C0);
+        z2 = Fma.MultiplyAdd(invW2, C1, C0);
+        z3 = Fma.MultiplyAdd(invW3, C1, C0);
+
+        Vector128<float> maxZ = V128.Max(V128.Max(z0, z1), V128.Max(z2, z3));
+
+        // If any W < 0, assume maxZ = 1 (effectively disabling Hi-Z)
+        if (T.PossiblyNearClipped)
+        {
+            maxZ = V128Helper.BlendVariable(maxZ, V128.Create(1.0f), V128.BitwiseOr(V128.BitwiseOr(wSign0, wSign1), V128.BitwiseOr(wSign2, wSign3)));
+        }
+
+        Vector64<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
+
+        Vector64.Store(packedDepthBounds, depthBounds);
+
+        // Compute screen space depth plane
+        Vector128<float> greaterArea = V128.LessThan(V128.AndNot(area0, minusZero128), V128.AndNot(area2, minusZero128));
+
+        // Force triangle area to be picked in the relevant mode.
+        Vector128<float> modeTriangle0 = V128.Equals(modes, V128.Create((int)PrimitiveMode.Triangle0)).AsSingle();
+        Vector128<float> modeTriangle1 = V128.Equals(modes, V128.Create((int)PrimitiveMode.Triangle1)).AsSingle();
+        greaterArea = V128.AndNot(V128.BitwiseOr(modeTriangle1, greaterArea), modeTriangle0);
+
+        Vector128<float> invArea;
+        if (T.PossiblyNearClipped)
+        {
+            // Do a precise divison to reduce error in depth plane. Note that the area computed here
+            // differs from the rasterized region if W < 0, so it can be very small for large covered screen regions.
+            invArea = V128.Divide(V128.Create(1.0f), V128Helper.BlendVariable(area0, area2, greaterArea));
+        }
+        else
+        {
+            invArea = V128Helper.Reciprocal(V128Helper.BlendVariable(area0, area2, greaterArea));
+        }
+
+        Vector128<float> z12 = V128.Subtract(z1, z2);
+        Vector128<float> z20 = V128.Subtract(z2, z0);
+        Vector128<float> z30 = V128.Subtract(z3, z0);
+
+        Vector128<float> edgeNormalsX4 = V128.Subtract(y0, y2);
+        Vector128<float> edgeNormalsY4 = V128.Subtract(x2, x0);
+
+        Vector128<float> depthPlane0, depthPlane1, depthPlane2;
+        depthPlane1 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, V128.Multiply(z12, edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, V128.Multiply(z30, edgeNormalsX4)), greaterArea));
+        depthPlane2 = V128.Multiply(invArea, V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, V128.Multiply(z12, edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, V128.Multiply(z30, edgeNormalsY4)), greaterArea));
+
+        x0 = V128.Subtract(x0, V128.ConvertToSingle(minX));
+        y0 = V128.Subtract(y0, V128.ConvertToSingle(minY));
+
+        depthPlane0 = Fma.MultiplyAddNegated(x0, depthPlane1, Fma.MultiplyAddNegated(y0, depthPlane2, z0));
+
+        // If mode == Triangle0, replace edge 2 with edge 4; if mode == Triangle1, replace edge 0 with edge 4
+        edgeNormalsX2 = V128Helper.BlendVariable(edgeNormalsX2, edgeNormalsX4, modeTriangle0);
+        edgeNormalsY2 = V128Helper.BlendVariable(edgeNormalsY2, edgeNormalsY4, modeTriangle0);
+        edgeNormalsX0 = V128Helper.BlendVariable(edgeNormalsX0, V128.Xor(minusZero128, edgeNormalsX4), modeTriangle1);
+        edgeNormalsY0 = V128Helper.BlendVariable(edgeNormalsY0, V128.Xor(minusZero128, edgeNormalsY4), modeTriangle1);
+
+        const float maxOffset = -minEdgeOffset;
+        Vector128<float> edgeFactor = V128.Create((OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
+
+        // Flip edges if W < 0
+        Vector128<float> edgeFlipMask0, edgeFlipMask1, edgeFlipMask2, edgeFlipMask3;
+        if (T.PossiblyNearClipped)
+        {
+            edgeFlipMask0 = V128.Xor(edgeFactor, V128.Xor(wSign0, V128Helper.BlendVariable(wSign1, wSign2, modeTriangle1)));
+            edgeFlipMask1 = V128.Xor(edgeFactor, V128.Xor(wSign1, wSign2));
+            edgeFlipMask2 = V128.Xor(edgeFactor, V128.Xor(wSign2, V128Helper.BlendVariable(wSign3, wSign0, modeTriangle0)));
+            edgeFlipMask3 = V128.Xor(edgeFactor, V128.Xor(wSign0, wSign3));
+        }
+        else
+        {
+            edgeFlipMask0 = edgeFactor;
+            edgeFlipMask1 = edgeFactor;
+            edgeFlipMask2 = edgeFactor;
+            edgeFlipMask3 = edgeFactor;
+        }
+
+        // Normalize edge equations for lookup
+        normalizeEdge(ref edgeNormalsX0, ref edgeNormalsY0, edgeFlipMask0);
+        normalizeEdge(ref edgeNormalsX1, ref edgeNormalsY1, edgeFlipMask1);
+        normalizeEdge(ref edgeNormalsX2, ref edgeNormalsY2, edgeFlipMask2);
+        normalizeEdge(ref edgeNormalsX3, ref edgeNormalsY3, edgeFlipMask3);
+
+        Vector128<float> add128 = V128.Create(0.5f - minEdgeOffset * (OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
+        Vector128<float> edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3;
+
+        edgeOffsets0 = Fma.MultiplyAddNegated(x0, edgeNormalsX0, Fma.MultiplyAddNegated(y0, edgeNormalsY0, add128));
+        edgeOffsets1 = Fma.MultiplyAddNegated(x1, edgeNormalsX1, Fma.MultiplyAddNegated(y1, edgeNormalsY1, add128));
+        edgeOffsets2 = Fma.MultiplyAddNegated(x2, edgeNormalsX2, Fma.MultiplyAddNegated(y2, edgeNormalsY2, add128));
+        edgeOffsets3 = Fma.MultiplyAddNegated(x3, edgeNormalsX3, Fma.MultiplyAddNegated(y3, edgeNormalsY3, add128));
+
+        edgeOffsets1 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX1, edgeOffsets1);
+        edgeOffsets2 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX2, edgeOffsets2);
+        edgeOffsets3 = Fma.MultiplyAdd(V128.ConvertToSingle(minX), edgeNormalsX3, edgeOffsets3);
+
+        edgeOffsets1 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY1, edgeOffsets1);
+        edgeOffsets2 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY2, edgeOffsets2);
+        edgeOffsets3 = Fma.MultiplyAdd(V128.ConvertToSingle(minY), edgeNormalsY3, edgeOffsets3);
+
+        // Quantize slopes
+        Vector128<int> slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);
+        Vector128<int> slopeLookups1 = quantizeSlopeLookup(edgeNormalsX1, edgeNormalsY1);
+        Vector128<int> slopeLookups2 = quantizeSlopeLookup(edgeNormalsX2, edgeNormalsY2);
+        Vector128<int> slopeLookups3 = quantizeSlopeLookup(edgeNormalsX3, edgeNormalsY3);
+
+        Vector128<int> firstBlockIdx = V128.Add(V128.Multiply(minY.AsInt16(), V128.Create((int)m_blocksX).AsInt16()).AsInt32(), minX);
+
+        V128.StoreAligned(firstBlockIdx, (int*)firstBlocks);
+
+        V128.StoreAligned(rangeX, (int*)rangesX);
+
+        V128.StoreAligned(rangeY, (int*)rangesY);
+
+        // Transpose into AoS
+        transpose256(depthPlane0, depthPlane1, depthPlane2, Vector128<float>.Zero, depthPlane);
+
+        transpose256(edgeNormalsX0, edgeNormalsX1, edgeNormalsX2, edgeNormalsX3, edgeNormalsX);
+
+        transpose256(edgeNormalsY0, edgeNormalsY1, edgeNormalsY2, edgeNormalsY3, edgeNormalsY);
+
+        transpose256(edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3, edgeOffsets);
+
+        transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, slopeLookups);
+
+        return 0;
     }
 
     private void rasterizeLoop(
