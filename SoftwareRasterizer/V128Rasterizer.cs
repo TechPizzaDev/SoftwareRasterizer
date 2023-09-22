@@ -594,16 +594,31 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
         for (uint packetIdx = 0; packetIdx < packetCount; packetIdx += 4)
         {
-            uint validMask = 0;
-
-            int RenderPacketPart(int partIndex)
+            int RenderPacketPart(
+                Vector128<float> mat0,
+                Vector128<float> mat1,
+                Vector128<float> mat3,
+                float c0,
+                float c1,
+                Vector128<int>* vertexData,
+                uint* primModes,
+                uint* firstBlocks,
+                uint* rangesX,
+                uint* rangesY,
+                Vector128<float>* depthPlane,
+                Vector128<float>* edgeNormalsX,
+                Vector128<float>* edgeNormalsY,
+                Vector128<float>* edgeOffsets,
+                Vector128<int>* slopeLookups,
+                ushort* depthBounds,
+                int* modeTableBuffer,
+                out uint overlappedPrimitiveValidMask)
             {
                 // Load data - only needed once per frame, so use streaming load
-                Vector128<int>* vertexDataPacketPtr = vertexData + packetIdx * 2 + partIndex;
-                Vector128<int> I0 = V128.LoadAlignedNonTemporal((int*)(vertexDataPacketPtr + 0));
-                Vector128<int> I1 = V128.LoadAlignedNonTemporal((int*)(vertexDataPacketPtr + 2));
-                Vector128<int> I2 = V128.LoadAlignedNonTemporal((int*)(vertexDataPacketPtr + 4));
-                Vector128<int> I3 = V128.LoadAlignedNonTemporal((int*)(vertexDataPacketPtr + 6));
+                Vector128<int> I0 = V128.LoadAlignedNonTemporal((int*)(vertexData + 0));
+                Vector128<int> I1 = V128.LoadAlignedNonTemporal((int*)(vertexData + 2));
+                Vector128<int> I2 = V128.LoadAlignedNonTemporal((int*)(vertexData + 4));
+                Vector128<int> I3 = V128.LoadAlignedNonTemporal((int*)(vertexData + 6));
 
                 // Vertex transformation - first W, then X & Y after camera plane culling, then Z after backface culling
                 Vector128<float> Xf0 = V128.ConvertToSingle(I0);
@@ -759,12 +774,13 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 Vector128<int> modes = V128.LoadAligned(modeTableBuffer);
                 if (V128Helper.TestZ(modes, modes))
                 {
+                    overlappedPrimitiveValidMask = 0;
                     return 1;
                 }
 
                 Vector128<int> primitiveValid = V128.GreaterThan(modes, Vector128<int>.Zero);
 
-                V128.StoreAligned(modes, (int*)(primModes + 4 * partIndex));
+                V128.StoreAligned(modes, (int*)primModes);
 
                 Vector128<float> minFx, minFy, maxFx, maxFy;
 
@@ -884,10 +900,11 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                 if (V128Helper.TestZ(overlappedPrimitiveValid, overlappedPrimitiveValid))
                 {
+                    overlappedPrimitiveValidMask = 0;
                     return 2;
                 }
 
-                validMask |= V128.ExtractMostSignificantBits(overlappedPrimitiveValid.AsSingle()) << (4 * partIndex);
+                overlappedPrimitiveValidMask = V128.ExtractMostSignificantBits(overlappedPrimitiveValid.AsSingle());
 
                 // Convert bounds from [min, max] to [min, range]
                 Vector128<int> rangeX = V128.Subtract(maxX, minX);
@@ -912,7 +929,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                 Vector64<ushort> packedDepthBounds = packDepthPremultiplied(maxZ);
 
-                Vector64.Store(packedDepthBounds, depthBounds + 4 * partIndex); 
+                Vector64.Store(packedDepthBounds, depthBounds);
 
                 // Compute screen space depth plane
                 Vector128<float> greaterArea = V128.LessThan(V128.AndNot(area0, minusZero128), V128.AndNot(area2, minusZero128));
@@ -1006,32 +1023,74 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
                 Vector128<int> firstBlockIdx = V128.Add(V128.Multiply(minY.AsInt16(), V128.Create((int)m_blocksX).AsInt16()).AsInt32(), minX);
 
-                V128.StoreAligned(firstBlockIdx, (int*)(firstBlocks + 4 * partIndex));
+                V128.StoreAligned(firstBlockIdx, (int*)firstBlocks);
 
-                V128.StoreAligned(rangeX, (int*)(rangesX + 4 * partIndex));
+                V128.StoreAligned(rangeX, (int*)rangesX);
 
-                V128.StoreAligned(rangeY, (int*)(rangesY + 4 * partIndex));
+                V128.StoreAligned(rangeY, (int*)rangesY);
 
                 // Transpose into AoS
-                transpose256(depthPlane0, depthPlane1, depthPlane2, Vector128<float>.Zero, depthPlane + partIndex);
+                transpose256(depthPlane0, depthPlane1, depthPlane2, Vector128<float>.Zero, depthPlane);
 
-                transpose256(edgeNormalsX0, edgeNormalsX1, edgeNormalsX2, edgeNormalsX3, edgeNormalsX + partIndex);
+                transpose256(edgeNormalsX0, edgeNormalsX1, edgeNormalsX2, edgeNormalsX3, edgeNormalsX);
 
-                transpose256(edgeNormalsY0, edgeNormalsY1, edgeNormalsY2, edgeNormalsY3, edgeNormalsY + partIndex);
+                transpose256(edgeNormalsY0, edgeNormalsY1, edgeNormalsY2, edgeNormalsY3, edgeNormalsY);
 
-                transpose256(edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3, edgeOffsets + partIndex);
+                transpose256(edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3, edgeOffsets);
 
-                transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, slopeLookups + partIndex);
+                transpose256i(slopeLookups0, slopeLookups1, slopeLookups2, slopeLookups3, slopeLookups);
 
                 return 0;
             }
 
-            int p0 = RenderPacketPart(0);
-            int p1 = RenderPacketPart(1);
+            Vector128<int>* vertexPartData = vertexData + packetIdx * 2;
+
+            int p0 = RenderPacketPart(
+                mat0, 
+                mat1,
+                mat3,
+                c0,
+                c1,
+                vertexPartData,
+                primModes,
+                firstBlocks,
+                rangesX,
+                rangesY,
+                depthPlane,
+                edgeNormalsX,
+                edgeNormalsY,
+                edgeOffsets,
+                slopeLookups,
+                depthBounds,
+                modeTableBuffer,
+                out uint validMask0);
+
+            int p1 = RenderPacketPart(
+                mat0,
+                mat1,
+                mat3,
+                c0,
+                c1,
+                vertexPartData + 1,
+                primModes + 4,
+                firstBlocks + 4,
+                rangesX + 4,
+                rangesY + 4,
+                depthPlane + 1,
+                edgeNormalsX + 1,
+                edgeNormalsY + 1,
+                edgeOffsets + 1,
+                slopeLookups + 1,
+                depthBounds + 4,
+                modeTableBuffer,
+                out uint validMask1);
+
             if (p0 == p1 && p0 != 0)
             {
                 continue;
             }
+
+            uint validMask = validMask0 | (validMask1 << 4);
 
             rasterizeLoop(
                 validMask,
