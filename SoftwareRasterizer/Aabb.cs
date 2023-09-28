@@ -48,8 +48,7 @@ public struct Aabb
         {
             Vector4 extents = getExtents();
             Vector4 extents2 = new(extents.Y, extents.Z, extents.X, extents.W);
-            float dot = ScalarMath.DotProduct_x7F(extents, extents2);
-            return new Vector4(dot, dot, dot, 0);
+            return new Vector4(ScalarMath.DotProduct_x7F(extents, extents2));
         }
     }
 }
