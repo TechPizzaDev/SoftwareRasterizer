@@ -12,9 +12,9 @@ public static unsafe class SurfaceAreaHeuristic
     private readonly struct V128AabbComparer : Algo.IComparer<uint>
     {
         public readonly Aabb* aabbs;
-        public readonly int mask;
+        public readonly uint mask;
 
-        public V128AabbComparer(Aabb* aabbs, int mask)
+        public V128AabbComparer(Aabb* aabbs, uint mask)
         {
             this.aabbs = aabbs;
             this.mask = mask;
@@ -31,9 +31,9 @@ public static unsafe class SurfaceAreaHeuristic
     private readonly struct ScalarAabbComparer : Algo.IComparer<uint>
     {
         public readonly Aabb* aabbs;
-        public readonly int mask;
+        public readonly uint mask;
 
-        public ScalarAabbComparer(Aabb* aabbs, int mask)
+        public ScalarAabbComparer(Aabb* aabbs, uint mask)
         {
             this.aabbs = aabbs;
             this.mask = mask;
@@ -50,7 +50,7 @@ public static unsafe class SurfaceAreaHeuristic
             sum |= aabbX.Z < aabbY.Z ? (1u << 2) : 0;
             sum |= aabbX.W < aabbY.W ? (1u << 3) : 0;
 
-            return (sum & (uint)mask) != 0;
+            return (sum & mask) != 0;
         }
     }
 
@@ -79,11 +79,11 @@ public static unsafe class SurfaceAreaHeuristic
             // Sort along center position
             if (Vector128.IsHardwareAccelerated)
             {
-                Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1 << splitAxis));
+                Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1u << splitAxis));
             }
             else
             {
-                Algo.stable_sort(sortStart, sortEnd, new ScalarAabbComparer(aabbsIn, 1 << splitAxis));
+                Algo.stable_sort(sortStart, sortEnd, new ScalarAabbComparer(aabbsIn, 1u << splitAxis));
             }
 
             Aabb fromLeft = new();
@@ -127,11 +127,11 @@ public static unsafe class SurfaceAreaHeuristic
         // Sort again according to best axis
         if (Vector128.IsHardwareAccelerated)
         {
-            Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1 << bestAxis));
+            Algo.stable_sort(sortStart, sortEnd, new V128AabbComparer(aabbsIn, 1u << bestAxis));
         }
         else
         {
-            Algo.stable_sort(sortStart, sortEnd, new ScalarAabbComparer(aabbsIn, 1 << bestAxis));
+            Algo.stable_sort(sortStart, sortEnd, new ScalarAabbComparer(aabbsIn, 1u << bestAxis));
         }
 
         return bestIndex;
