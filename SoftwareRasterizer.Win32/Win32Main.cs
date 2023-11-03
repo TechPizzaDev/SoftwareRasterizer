@@ -44,11 +44,10 @@ public unsafe class Win32Main : Main
         HWND hWnd;
         fixed (char* windowName = "Rasterizer")
         {
+            void* mainHandle = (void*)GCHandle.ToIntPtr(GCHandle.Alloc(this));
             hWnd = CreateWindowW((ushort*)windowClass, (ushort*)windowName, WS.WS_SYSMENU,
-              CW_USEDEFAULT, CW_USEDEFAULT, (int)WindowWidth, (int)WindowHeight, default, default, hInstance, default);
+              CW_USEDEFAULT, CW_USEDEFAULT, (int)WindowWidth, (int)WindowHeight, default, default, hInstance, mainHandle);
         }
-
-        hwndToInstanceLookup[(IntPtr)hWnd.Value] = this;
 
         HDC hdc = GetDC(hWnd);
         g_hBitmap = CreateCompatibleBitmap(hdc, (int)WindowWidth, (int)WindowHeight);
@@ -70,12 +69,20 @@ public unsafe class Win32Main : Main
     [UnmanagedCallersOnly]
     private static LRESULT WndProc(HWND hWnd, uint message, WPARAM wParam, LPARAM lParam)
     {
-        Win32Main main = hwndToInstanceLookup[(IntPtr)hWnd.Value];
-
         switch (message)
         {
+            case WM.WM_CREATE:
+            {
+                CREATESTRUCTW* createInfo = (CREATESTRUCTW*)lParam.Value;
+                GCHandle handle = GCHandle.FromIntPtr((IntPtr)createInfo->lpCreateParams);
+                hwndToInstanceLookup[(IntPtr)hWnd.Value] = (Win32Main)handle.Target!;
+                handle.Free();
+                break;
+            }
+
             case WM.WM_PAINT:
             {
+                Win32Main main = hwndToInstanceLookup[(IntPtr)hWnd.Value];
                 main.Rasterize();
 
                 (double avgRasterTime, double stDev, double median) = main.GetTimings();
