@@ -3,7 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.4.33205.214
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SoftwareRasterizer", "SoftwareRasterizer\SoftwareRasterizer.csproj", "{6CEA8C7A-5979-4BCB-A2A3-5DDFFAEE586F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SoftwareRasterizer", "SoftwareRasterizer\SoftwareRasterizer.csproj", "{6CEA8C7A-5979-4BCB-A2A3-5DDFFAEE586F}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SoftwareRasterizer.Browser", "SoftwareRasterizer.Browser\SoftwareRasterizer.Browser.csproj", "{689FD2B7-4D83-4F99-8A31-6C33ACFBEDAA}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SoftwareRasterizer.Win32", "SoftwareRasterizer.Win32\SoftwareRasterizer.Win32.csproj", "{AD45091F-F118-43E3-99A8-D76B2C977CFC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +19,14 @@ Global
 		{6CEA8C7A-5979-4BCB-A2A3-5DDFFAEE586F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6CEA8C7A-5979-4BCB-A2A3-5DDFFAEE586F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6CEA8C7A-5979-4BCB-A2A3-5DDFFAEE586F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{689FD2B7-4D83-4F99-8A31-6C33ACFBEDAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{689FD2B7-4D83-4F99-8A31-6C33ACFBEDAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{689FD2B7-4D83-4F99-8A31-6C33ACFBEDAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{689FD2B7-4D83-4F99-8A31-6C33ACFBEDAA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AD45091F-F118-43E3-99A8-D76B2C977CFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AD45091F-F118-43E3-99A8-D76B2C977CFC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AD45091F-F118-43E3-99A8-D76B2C977CFC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AD45091F-F118-43E3-99A8-D76B2C977CFC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
