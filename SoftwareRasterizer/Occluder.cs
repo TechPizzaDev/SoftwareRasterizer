@@ -147,8 +147,8 @@ public unsafe struct Occluder : IDisposable
                 Vector4 v7 = ((orderedVertices[i + j + 28] - refMin) * invExtents);
 
                 // Transpose into [xxxx][yyyy][zzzz][wwww]
-                _MM_TRANSPOSE4_PS(ref v0, ref v1, ref v2, ref v3);
-                _MM_TRANSPOSE4_PS(ref v4, ref v5, ref v6, ref v7);
+                ScalarMath._MM_TRANSPOSE4_PS(ref v0, ref v1, ref v2, ref v3);
+                ScalarMath._MM_TRANSPOSE4_PS(ref v4, ref v5, ref v6, ref v7);
 
                 // Scale and truncate to int
                 v0 = ((v0 * scalingX) + half);

@@ -47,32 +47,32 @@ public static class VectorMath
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void _MM_TRANSPOSE4_PS(
-        ref Vector4 row0, ref Vector4 row1, ref Vector4 row2, ref Vector4 row3)
-    {
-        Vector128<float> _Tmp0 = Sse.Shuffle(row0.AsVector128(), row1.AsVector128(), 0x44);
-        Vector128<float> _Tmp2 = Sse.Shuffle(row0.AsVector128(), row1.AsVector128(), 0xEE);
-        Vector128<float> _Tmp1 = Sse.Shuffle(row2.AsVector128(), row3.AsVector128(), 0x44);
-        Vector128<float> _Tmp3 = Sse.Shuffle(row2.AsVector128(), row3.AsVector128(), 0xEE);
-
-        row0 = Sse.Shuffle(_Tmp0, _Tmp1, 0x88).AsVector4();
-        row1 = Sse.Shuffle(_Tmp0, _Tmp1, 0xDD).AsVector4();
-        row2 = Sse.Shuffle(_Tmp2, _Tmp3, 0x88).AsVector4();
-        row3 = Sse.Shuffle(_Tmp2, _Tmp3, 0xDD).AsVector4();
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void _MM_TRANSPOSE4_PS(
         ref Vector128<float> row0, ref Vector128<float> row1, ref Vector128<float> row2, ref Vector128<float> row3)
     {
-        Vector128<float> _Tmp0 = Sse.Shuffle(row0, row1, 0x44);
-        Vector128<float> _Tmp2 = Sse.Shuffle(row0, row1, 0xEE);
-        Vector128<float> _Tmp1 = Sse.Shuffle(row2, row3, 0x44);
-        Vector128<float> _Tmp3 = Sse.Shuffle(row2, row3, 0xEE);
+        if (Sse.IsSupported)
+        {
+            Vector128<float> _Tmp0 = Sse.Shuffle(row0, row1, 0x44);
+            Vector128<float> _Tmp2 = Sse.Shuffle(row0, row1, 0xEE);
+            Vector128<float> _Tmp1 = Sse.Shuffle(row2, row3, 0x44);
+            Vector128<float> _Tmp3 = Sse.Shuffle(row2, row3, 0xEE);
 
-        row0 = Sse.Shuffle(_Tmp0, _Tmp1, 0x88);
-        row1 = Sse.Shuffle(_Tmp0, _Tmp1, 0xDD);
-        row2 = Sse.Shuffle(_Tmp2, _Tmp3, 0x88);
-        row3 = Sse.Shuffle(_Tmp2, _Tmp3, 0xDD);
+            row0 = Sse.Shuffle(_Tmp0, _Tmp1, 0x88);
+            row1 = Sse.Shuffle(_Tmp0, _Tmp1, 0xDD);
+            row2 = Sse.Shuffle(_Tmp2, _Tmp3, 0x88);
+            row3 = Sse.Shuffle(_Tmp2, _Tmp3, 0xDD);
+        }
+        else
+        {
+            Vector4 t0 = row0.AsVector4();
+            Vector4 t1 = row1.AsVector4();
+            Vector4 t2 = row2.AsVector4();
+            Vector4 t3 = row3.AsVector4();
+
+            row0 = Vector128.Create(t0.X, t1.X, t2.X, t3.X);
+            row1 = Vector128.Create(t0.Y, t1.Y, t2.Y, t3.Y);
+            row2 = Vector128.Create(t0.Z, t1.Z, t2.Z, t3.Z);
+            row3 = Vector128.Create(t0.W, t1.W, t2.W, t3.W);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
