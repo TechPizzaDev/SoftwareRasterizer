@@ -40,15 +40,9 @@ public static class V128Helper
         }
         else
         {
-            Vector128<ushort> mask = Vector128.Create(
-                ((control & (1 << 0)) != 0) ? (ushort)0xff : (ushort)0,
-                ((control & (1 << 1)) != 0) ? (ushort)0xff : (ushort)0,
-                ((control & (1 << 2)) != 0) ? (ushort)0xff : (ushort)0,
-                ((control & (1 << 3)) != 0) ? (ushort)0xff : (ushort)0,
-                ((control & (1 << 4)) != 0) ? (ushort)0xff : (ushort)0,
-                ((control & (1 << 5)) != 0) ? (ushort)0xff : (ushort)0,
-                ((control & (1 << 6)) != 0) ? (ushort)0xff : (ushort)0,
-                ((control & (1 << 7)) != 0) ? (ushort)0xff : (ushort)0);
+            Vector128<ushort> mask = Vector128.Equals(
+                Vector128.Create((ushort) control) & Vector128.Create((ushort) 1, 2, 4, 8, 16, 32, 64, 128),
+                Vector128<ushort>.Zero);
             return Vector128.ConditionalSelect(mask, right, left);
         }
     }
