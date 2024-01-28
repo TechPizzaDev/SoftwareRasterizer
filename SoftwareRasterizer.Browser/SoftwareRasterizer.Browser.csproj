@@ -1,16 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
 
     <PropertyGroup>
-        <OutputType>Exe</OutputType>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <TargetFramework>net7.0</TargetFramework>
-        <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
-        <WasmMainJSPath>main.js</WasmMainJSPath>
+        <TargetFramework>net8.0</TargetFramework>
 
         <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
         <DebugSymbols>true</DebugSymbols>
         <DebugType>embedded</DebugType>
+        <WasmEnableSIMD>true</WasmEnableSIMD>
+        <RunAOTCompilation>true</RunAOTCompilation>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' != 'Debug'">
@@ -18,7 +17,8 @@
         <EnableAggressiveTrimming>$(EnableAOTAndTrimming)</EnableAggressiveTrimming>
         <PublishTrimmed>$(EnableAOTAndTrimming)</PublishTrimmed>
         <RunAOTCompilation>$(EnableAOTAndTrimming)</RunAOTCompilation>
-    
+        <WasmStripILAfterAOT>true</WasmStripILAfterAOT>
+
         <!-- Runtime feature defaults to trim unnecessary code -->
         <EventSourceSupport>false</EventSourceSupport>
         <UseSystemResourceKeys>true</UseSystemResourceKeys>
@@ -29,12 +29,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\SoftwareRasterizer\SoftwareRasterizer.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <WasmExtraFilesToDeploy Include="index.html" />
-        <WasmExtraFilesToDeploy Include="main.js" />
+        <ProjectReference Include="..\SoftwareRasterizer\SoftwareRasterizer.csproj" />
     </ItemGroup>
 
 </Project>
