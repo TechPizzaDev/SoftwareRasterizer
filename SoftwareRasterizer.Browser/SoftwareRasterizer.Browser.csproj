@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
 
     <PropertyGroup>
-        <OutputType>Exe</OutputType>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <TargetFramework>net8.0</TargetFramework>
@@ -10,8 +9,7 @@
         <DebugSymbols>true</DebugSymbols>
         <DebugType>embedded</DebugType>
         <WasmEnableSIMD>true</WasmEnableSIMD>
-        <WasmNativeDebugSymbols>true</WasmNativeDebugSymbols>
-        <WasmNativeStrip>false</WasmNativeStrip>
+        <RunAOTCompilation>true</RunAOTCompilation>
     </PropertyGroup>
 
     <PropertyGroup Condition="'$(Configuration)' != 'Debug'">
@@ -19,7 +17,8 @@
         <EnableAggressiveTrimming>$(EnableAOTAndTrimming)</EnableAggressiveTrimming>
         <PublishTrimmed>$(EnableAOTAndTrimming)</PublishTrimmed>
         <RunAOTCompilation>$(EnableAOTAndTrimming)</RunAOTCompilation>
-    
+        <WasmStripILAfterAOT>true</WasmStripILAfterAOT>
+
         <!-- Runtime feature defaults to trim unnecessary code -->
         <EventSourceSupport>false</EventSourceSupport>
         <UseSystemResourceKeys>true</UseSystemResourceKeys>
@@ -30,7 +29,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\SoftwareRasterizer\SoftwareRasterizer.csproj" />
+        <ProjectReference Include="..\SoftwareRasterizer\SoftwareRasterizer.csproj" />
     </ItemGroup>
 
 </Project>

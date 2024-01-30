@@ -1,6 +1,7 @@
 ﻿using System;
-using System.IO;
 using System.Runtime.InteropServices.JavaScript;
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Wasm;
 using System.Runtime.Versioning;
 
 [assembly: SupportedOSPlatform("browser")]
@@ -11,6 +12,9 @@ internal partial class Program
 {
     static void Main(string[] args)
     {
+        Console.WriteLine("Vector128.IsHardwareAccelerated = " + Vector128.IsHardwareAccelerated);
+        Console.WriteLine("PackedSimd.IsSupported = " + PackedSimd.IsSupported);
+
         BrowserMain main = new(uint.Parse(args[0]), uint.Parse(args[1]));
 
         void callback(double value)

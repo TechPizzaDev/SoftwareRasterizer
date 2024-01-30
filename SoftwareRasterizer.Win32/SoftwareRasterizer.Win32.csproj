@@ -12,7 +12,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\SoftwareRasterizer.Browser\SoftwareRasterizer.Browser.csproj" />
+      <ProjectReference Include="..\SoftwareRasterizer\SoftwareRasterizer.csproj" />
     </ItemGroup>
 
 </Project>
