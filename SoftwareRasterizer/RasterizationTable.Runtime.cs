@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if RASTERIZER_RUNTIME_TABLE
+using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -9,22 +10,15 @@ namespace SoftwareRasterizer;
 
 using static Rasterizer;
 
-public sealed unsafe class RasterizationTable : SafeHandle
+public sealed unsafe partial class RasterizationTable : SafeHandle
 {
     private const uint angularResolution = 2000;
     private const uint offsetResolution = 2000;
 
-    public override bool IsInvalid => handle == IntPtr.Zero;
-
-    public RasterizationTable() : base(0, true)
+    public RasterizationTable() : this(clear: true)
     {
-        uint precomputedRasterTablesByteCount = OFFSET_QUANTIZATION_FACTOR * SLOPE_QUANTIZATION_FACTOR * sizeof(ulong);
-        ulong* precomputedRasterTables = (ulong*)NativeMemory.AlignedAlloc(
-            byteCount: precomputedRasterTablesByteCount,
-            alignment: 256 / 8);
-
-        NativeMemory.Clear(precomputedRasterTables, precomputedRasterTablesByteCount);
-
+        ulong* precomputedRasterTables = (ulong*) handle;
+        
         if (Vector256.IsHardwareAccelerated)
         {
             ComputeRasterizationTableV256(precomputedRasterTables);
@@ -37,11 +31,8 @@ public sealed unsafe class RasterizationTable : SafeHandle
         {
             ComputeRasterizationTableScalar(precomputedRasterTables);
         }
-
-        handle = (IntPtr)precomputedRasterTables;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void ComputeRasterizationTableV256(ulong* table)
     {
         for (uint i = 0; i < angularResolution; ++i)
@@ -54,7 +45,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
             nx *= l;
             ny *= l;
 
-            uint slopeLookup = (uint)quantizeSlopeLookup(nx, ny);
+            uint slopeLookup = (uint) quantizeSlopeLookup(nx, ny);
 
             Vector256<float> inc = Vector256.Create(
                 (0 - 3.5f) / 8f,
@@ -97,7 +88,6 @@ public sealed unsafe class RasterizationTable : SafeHandle
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void ComputeRasterizationTableV128(ulong* table)
     {
         for (uint i = 0; i < angularResolution; ++i)
@@ -110,7 +100,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
             nx *= l;
             ny *= l;
 
-            uint slopeLookup = (uint)quantizeSlopeLookup(nx, ny);
+            uint slopeLookup = (uint) quantizeSlopeLookup(nx, ny);
 
             Vector128<float> inc1 = Vector128.Create(
                 (0 - 3.5f) / 8f,
@@ -170,7 +160,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
             nx *= l;
             ny *= l;
 
-            uint slopeLookup = (uint)quantizeSlopeLookup(nx, ny);
+            uint slopeLookup = (uint) quantizeSlopeLookup(nx, ny);
 
             for (uint j = 0; j < offsetResolution; ++j)
             {
@@ -221,8 +211,8 @@ public sealed unsafe class RasterizationTable : SafeHandle
             {
                 for (uint bit = 0; bit < 4; ++bit)
                 {
-                    maskA |= ((mask >> (int)(8 * group + 2 * bit + 0)) & 1) << (int)(4 + group * 8 + bit);
-                    maskB |= ((mask >> (int)(8 * group + 2 * bit + 1)) & 1) << (int)(0 + group * 8 + bit);
+                    maskA |= ((mask >> (int) (8 * group + 2 * bit + 0)) & 1) << (int) (4 + group * 8 + bit);
+                    maskB |= ((mask >> (int) (8 * group + 2 * bit + 1)) & 1) << (int) (0 + group * 8 + bit);
                 }
             }
             return maskA | maskB;
@@ -250,20 +240,20 @@ public sealed unsafe class RasterizationTable : SafeHandle
             b |= (mask & 0b01000000u) << 10;
             b |= (mask & 0b10000000u) << 17;
 
-            return ((ulong)b << 32) | a;
+            return ((ulong) b << 32) | a;
         }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int quantizeSlopeLookup(float nx, float ny)
     {
-        int yNeg = ny < 0 ? unchecked((int)0xFFFFFFFF) : 0;
+        int yNeg = ny < 0 ? unchecked((int) 0xFFFFFFFF) : 0;
 
         // Remap [-1, 1] to [0, SLOPE_QUANTIZATION / 2]
         const float mul = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f;
         const float add = mul + 0.5f;
 
-        int quantizedSlope = (int)(nx * mul + add);
+        int quantizedSlope = (int) (nx * mul + add);
         return ((quantizedSlope << 1) - yNeg) << OFFSET_QUANTIZATION_BITS;
     }
 
@@ -277,12 +267,7 @@ public sealed unsafe class RasterizationTable : SafeHandle
         const float add = 0.5f - minEdgeOffset * mul;
 
         float lookup = offset * mul + add;
-        return (uint)Math.Min(Math.Max((int)lookup, 0), OFFSET_QUANTIZATION_FACTOR - 1);
-    }
-
-    protected override bool ReleaseHandle()
-    {
-        NativeMemory.AlignedFree((void*)handle);
-        return true;
+        return (uint) Math.Min(Math.Max((int) lookup, 0), OFFSET_QUANTIZATION_FACTOR - 1);
     }
 }
+#endif
