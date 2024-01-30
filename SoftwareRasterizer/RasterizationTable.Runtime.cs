@@ -21,9 +21,9 @@ public sealed unsafe class RasterizationTable : SafeHandle
         uint precomputedRasterTablesByteCount = OFFSET_QUANTIZATION_FACTOR * SLOPE_QUANTIZATION_FACTOR * sizeof(ulong);
         ulong* precomputedRasterTables = (ulong*)NativeMemory.AlignedAlloc(
             byteCount: precomputedRasterTablesByteCount,
-            alignment: sizeof(ulong));
+            alignment: 256 / 8);
 
-        Unsafe.InitBlockUnaligned(precomputedRasterTables, 0, precomputedRasterTablesByteCount);
+        NativeMemory.Clear(precomputedRasterTables, precomputedRasterTablesByteCount);
 
         if (Vector256.IsHardwareAccelerated)
         {
