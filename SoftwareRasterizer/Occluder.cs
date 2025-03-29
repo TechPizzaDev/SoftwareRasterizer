@@ -31,10 +31,11 @@ public unsafe struct Occluder : IDisposable
         Debug.Assert(vertices.Length % 16 == 0);
 
         // Simple k-means clustering by normal direction to improve backface culling efficiency
-        uint quadNormalsLength = (uint)vertices.Length / 4;
-        Vector4* quadNormals = (Vector4*)NativeMemory.AlignedAlloc(
-            byteCount: quadNormalsLength * (uint)sizeof(Vector4),
-            alignment: (uint)sizeof(Vector4));
+        uint quadNormalsLength = (uint) vertices.Length / 4;
+        Vector4* quadNormals = (Vector4*) NativeMemory.AlignedAlloc(
+            byteCount: quadNormalsLength * (uint) sizeof(Vector4),
+            alignment: (uint) sizeof(Vector4));
+        
         for (int i = 0; i < vertices.Length; i += 4)
         {
             Vector4 v0 = vertices[i + 0];
@@ -42,11 +43,10 @@ public unsafe struct Occluder : IDisposable
             Vector4 v2 = vertices[i + 2];
             Vector4 v3 = vertices[i + 3];
 
-            quadNormals[(uint)i / 4] = normalize((normal(v0, v1, v2) + normal(v0, v2, v3)));
+            quadNormals[(uint) i / 4] = normalize((normal(v0, v1, v2) + normal(v0, v2, v3)));
         }
 
-        const int centroidsLength = 6;
-        Vector4* centroids = stackalloc Vector4[centroidsLength];
+        Span<Vector4> centroids = stackalloc Vector4[6];
         centroids[0] = new Vector4(+1.0f, 0.0f, 0.0f, 0.0f);
         centroids[1] = new Vector4(0.0f, +1.0f, 0.0f, 0.0f);
         centroids[2] = new Vector4(0.0f, 0.0f, +1.0f, 0.0f);
@@ -54,7 +54,7 @@ public unsafe struct Occluder : IDisposable
         centroids[4] = new Vector4(0.0f, 0.0f, -1.0f, 0.0f);
         centroids[5] = new Vector4(-1.0f, 0.0f, 0.0f, 0.0f);
 
-        uint* centroidAssignment = (uint*)NativeMemory.Alloc(quadNormalsLength, sizeof(uint));
+        uint* centroidAssignment = (uint*) NativeMemory.Alloc(quadNormalsLength, sizeof(uint));
 
         bool anyChanged = true;
         for (int iter = 0; iter < 10 && anyChanged; ++iter)
@@ -67,13 +67,13 @@ public unsafe struct Occluder : IDisposable
 
                 float bestDistance = float.NegativeInfinity;
                 uint bestCentroid = 0;
-                for (int k = 0; k < centroidsLength; ++k)
+                for (int k = 0; k < centroids.Length; ++k)
                 {
                     float distance = ScalarMath.DotProduct_x7F(centroids[k], normal);
                     if (distance >= bestDistance)
                     {
                         bestDistance = distance;
-                        bestCentroid = (uint)k;
+                        bestCentroid = (uint) k;
                     }
                 }
 
@@ -84,19 +84,19 @@ public unsafe struct Occluder : IDisposable
                 }
             }
 
-            for (int k = 0; k < centroidsLength; ++k)
+            for (int k = 0; k < centroids.Length; ++k)
             {
                 centroids[k] = Vector4.Zero;
             }
 
             for (int j = 0; j < quadNormalsLength; ++j)
             {
-                int k = (int)centroidAssignment[j];
+                int k = (int) centroidAssignment[j];
 
                 centroids[k] = (centroids[k] + quadNormals[j]);
             }
 
-            for (int k = 0; k < centroidsLength; ++k)
+            for (int k = 0; k < centroids.Length; ++k)
             {
                 centroids[k] = normalize(centroids[k]);
             }
@@ -104,7 +104,7 @@ public unsafe struct Occluder : IDisposable
         NativeMemory.AlignedFree(quadNormals);
 
         List<Vector4> orderedVertexList = new();
-        for (uint k = 0; k < centroidsLength; ++k)
+        for (uint k = 0; k < centroids.Length; ++k)
         {
             for (int j = 0; j < quadNormalsLength; ++j)
             {
@@ -119,8 +119,15 @@ public unsafe struct Occluder : IDisposable
         }
         NativeMemory.Free(centroidAssignment);
 
-        Span<Vector4> orderedVertices = CollectionsMarshal.AsSpan(orderedVertexList);
+        return Bake(vertices, refMin, refMax, CollectionsMarshal.AsSpan(orderedVertexList));
+    }
 
+    private static Occluder Bake(
+        ReadOnlySpan<Vector4> vertices,
+        Vector4 refMin,
+        Vector4 refMax,
+        ReadOnlySpan<Vector4> orderedVertices)
+    { 
         Vector4 invExtents = (new Vector4(1.0f) / (refMax - refMin));
 
         Vector4 scalingX = new(2047.0f);
