@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using TerraFX.Interop.Windows;
 
 namespace SoftwareRasterizer.Win32;
@@ -10,6 +11,7 @@ namespace SoftwareRasterizer.Win32;
 using static Windows;
 using static VK;
 
+[SupportedOSPlatform("windows")]
 public unsafe class Win32Main : Main
 {
     private static readonly ConcurrentDictionary<IntPtr, Win32Main> hwndToInstanceLookup = new();
