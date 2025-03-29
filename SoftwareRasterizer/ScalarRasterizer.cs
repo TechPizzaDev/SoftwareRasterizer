@@ -1018,7 +1018,7 @@ public unsafe class ScalarRasterizer : Rasterizer
                 Vector4I slopeLookups2 = quantizeSlopeLookup(edgeNormalsX2, edgeNormalsY2);
                 Vector4I slopeLookups3 = quantizeSlopeLookup(edgeNormalsX3, edgeNormalsY3);
 
-                Vector128<int> firstBlockIdx = Sse2.Add(Sse2.MultiplyLow(minY.AsInt16(), Vector128.Create((int)m_blocksX).AsInt16()).AsInt32(), minX);
+                Vector128<int> firstBlockIdx = ((minY.AsInt16() * Vector128.Create((int)m_blocksX).AsInt16()).AsInt32() + minX);
 
                 Unsafe.Write((int*)(firstBlocks + 4 * partIndex), firstBlockIdx);
 
@@ -1278,7 +1278,7 @@ public unsafe class ScalarRasterizer : Rasterizer
                     if (blockMask != 0xffff_ffff_ffff_ffff)
                     {
                         Vector128<ushort> A = Vector128.CreateScalar((long)blockMask).AsUInt16();
-                        Vector128<ushort> B = Sse2.ShiftLeftLogical(A.AsInt16(), 4).AsUInt16();
+                        Vector128<ushort> B = (A.AsInt16() << 4).AsUInt16();
 
                         Vector128<byte> C_A = Sse41.Blend(A, B, 0b11_11_00_00).AsByte();
                         Vector128<byte> C_B = Sse41.Blend(A, B, 0b00_00_11_11).AsByte();
@@ -1286,14 +1286,14 @@ public unsafe class ScalarRasterizer : Rasterizer
                         Vector128<short> rowMask_A = Sse2.UnpackLow(C_A, C_A).AsInt16();
                         Vector128<short> rowMask_B = Sse2.UnpackLow(C_B, C_B).AsInt16();
 
-                        d0_A = Sse41.BlendVariable(Vector128<byte>.Zero, d0_A.AsByte(), Sse2.ShiftLeftLogical(rowMask_A, 3).AsByte()).AsUInt16();
-                        d1_A = Sse41.BlendVariable(Vector128<byte>.Zero, d1_A.AsByte(), Sse2.ShiftLeftLogical(rowMask_A, 2).AsByte()).AsUInt16();
-                        d2_A = Sse41.BlendVariable(Vector128<byte>.Zero, d2_A.AsByte(), Sse2.Add(rowMask_A, rowMask_A).AsByte()).AsUInt16();
+                        d0_A = Sse41.BlendVariable(Vector128<byte>.Zero, d0_A.AsByte(), (rowMask_A << 3).AsByte()).AsUInt16();
+                        d1_A = Sse41.BlendVariable(Vector128<byte>.Zero, d1_A.AsByte(), (rowMask_A << 2).AsByte()).AsUInt16();
+                        d2_A = Sse41.BlendVariable(Vector128<byte>.Zero, d2_A.AsByte(), (rowMask_A + rowMask_A).AsByte()).AsUInt16();
                         d3_A = Sse41.BlendVariable(Vector128<byte>.Zero, d3_A.AsByte(), rowMask_A.AsByte()).AsUInt16();
 
-                        d0_B = Sse41.BlendVariable(Vector128<byte>.Zero, d0_B.AsByte(), Sse2.ShiftLeftLogical(rowMask_B, 3).AsByte()).AsUInt16();
-                        d1_B = Sse41.BlendVariable(Vector128<byte>.Zero, d1_B.AsByte(), Sse2.ShiftLeftLogical(rowMask_B, 2).AsByte()).AsUInt16();
-                        d2_B = Sse41.BlendVariable(Vector128<byte>.Zero, d2_B.AsByte(), Sse2.Add(rowMask_B, rowMask_B).AsByte()).AsUInt16();
+                        d0_B = Sse41.BlendVariable(Vector128<byte>.Zero, d0_B.AsByte(), (rowMask_B << 3).AsByte()).AsUInt16();
+                        d1_B = Sse41.BlendVariable(Vector128<byte>.Zero, d1_B.AsByte(), (rowMask_B << 2).AsByte()).AsUInt16();
+                        d2_B = Sse41.BlendVariable(Vector128<byte>.Zero, d2_B.AsByte(), (rowMask_B + rowMask_B).AsByte()).AsUInt16();
                         d3_B = Sse41.BlendVariable(Vector128<byte>.Zero, d3_B.AsByte(), rowMask_B.AsByte()).AsUInt16();
                     }
 

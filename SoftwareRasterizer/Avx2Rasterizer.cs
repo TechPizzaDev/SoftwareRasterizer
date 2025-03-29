@@ -9,7 +9,7 @@ namespace SoftwareRasterizer;
 using static VectorMath;
 
 public unsafe class Avx2Rasterizer<Fma> : Rasterizer
-    where Fma : IFusedMultiplyAdd128, IFusedMultiplyAdd256
+    where Fma : IMultiplyAdd, IFusedMultiplyAdd128, IFusedMultiplyAdd256
 {
     private const FloatComparisonMode _CMP_LT_OQ = FloatComparisonMode.OrderedLessThanNonSignaling;
     private const FloatComparisonMode _CMP_LE_OQ = FloatComparisonMode.OrderedLessThanOrEqualNonSignaling;
@@ -49,11 +49,11 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         Sse.StoreAligned(m_modelViewProjectionRaw + 12, mat3);
 
         // Bake viewport transform into matrix and 6shift by half a block
-        mat0 = Sse.Multiply(Sse.Add(mat0, mat3), Vector128.Create(m_width * 0.5f - 4.0f));
-        mat1 = Sse.Multiply(Sse.Add(mat1, mat3), Vector128.Create(m_height * 0.5f - 4.0f));
+        mat0 = (mat0 + mat3) * Vector128.Create(m_width * 0.5f - 4.0f);
+        mat1 = (mat1 + mat3) * Vector128.Create(m_height * 0.5f - 4.0f);
 
         // Map depth from [-1, 1] to [bias, 0]
-        mat2 = Sse.Multiply(Sse.Subtract(mat3, mat2), Vector128.Create(0.5f * floatCompressionBias));
+        mat2 = ((mat3 - mat2) * Vector128.Create(0.5f * floatCompressionBias));
 
         (mat0, mat1, mat2, mat3) = _MM_TRANSPOSE4_PS(mat0, mat1, mat2, mat3);
 
@@ -86,8 +86,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         Vector128<float> boundsMax = vBoundsMax.AsVector128();
 
         // Frustum cull
-        Vector128<float> extents = Sse.Subtract(boundsMax, boundsMin);
-        Vector128<float> center = Sse.Add(boundsMax, boundsMin); // Bounding box center times 2 - but since W = 2, the plane equations work out correctly
+        Vector128<float> extents = (boundsMax - boundsMin);
+        Vector128<float> center = (boundsMax + boundsMin); // Bounding box center times 2 - but since W = 2, the plane equations work out correctly
         Vector128<float> minusZero = Vector128.Create(-0.0f);
 
         Vector128<float> row0 = Sse.LoadVector128(m_modelViewProjectionRaw + 0);
@@ -96,35 +96,32 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         Vector128<float> row3 = Sse.LoadVector128(m_modelViewProjectionRaw + 12);
 
         // Compute distance from each frustum plane
-        Vector128<float> plane0 = Sse.Add(row3, row0);
-        Vector128<float> offset0 = Sse.Add(center, Sse.Xor(extents, Sse.And(plane0, minusZero)));
-        Vector128<float> dist0 = Sse41.DotProduct(plane0, offset0, 0xff);
+        Vector128<float> plane0 = (row3 + row0);
+        Vector128<float> offset0 = (center + (extents ^ (plane0 & minusZero)));
+        int combined = BitConverter.SingleToInt32Bits(Vector128.Dot(plane0, offset0));
 
-        Vector128<float> plane1 = Sse.Subtract(row3, row0);
-        Vector128<float> offset1 = Sse.Add(center, Sse.Xor(extents, Sse.And(plane1, minusZero)));
-        Vector128<float> dist1 = Sse41.DotProduct(plane1, offset1, 0xff);
+        Vector128<float> plane1 = (row3 - row0);
+        Vector128<float> offset1 = (center + (extents ^ (plane1 & minusZero)));
+        combined |= BitConverter.SingleToInt32Bits(Vector128.Dot(plane1, offset1));
 
-        Vector128<float> plane2 = Sse.Add(row3, row1);
-        Vector128<float> offset2 = Sse.Add(center, Sse.Xor(extents, Sse.And(plane2, minusZero)));
-        Vector128<float> dist2 = Sse41.DotProduct(plane2, offset2, 0xff);
+        Vector128<float> plane2 = (row3 + row1);
+        Vector128<float> offset2 = (center + (extents ^ (plane2 & minusZero)));
+        combined |= BitConverter.SingleToInt32Bits(Vector128.Dot(plane2, offset2));
 
-        Vector128<float> plane3 = Sse.Subtract(row3, row1);
-        Vector128<float> offset3 = Sse.Add(center, Sse.Xor(extents, Sse.And(plane3, minusZero)));
-        Vector128<float> dist3 = Sse41.DotProduct(plane3, offset3, 0xff);
+        Vector128<float> plane3 = (row3 - row1);
+        Vector128<float> offset3 = (center + (extents ^ (plane3 & minusZero)));
+        combined |= BitConverter.SingleToInt32Bits(Vector128.Dot(plane3, offset3));
 
-        Vector128<float> plane4 = Sse.Add(row3, row2);
-        Vector128<float> offset4 = Sse.Add(center, Sse.Xor(extents, Sse.And(plane4, minusZero)));
-        Vector128<float> dist4 = Sse41.DotProduct(plane4, offset4, 0xff);
+        Vector128<float> plane4 = (row3 + row2);
+        Vector128<float> offset4 = (center + (extents ^ (plane4 & minusZero)));
+        combined |= BitConverter.SingleToInt32Bits(Vector128.Dot(plane4, offset4));
 
-        Vector128<float> plane5 = Sse.Subtract(row3, row2);
-        Vector128<float> offset5 = Sse.Add(center, Sse.Xor(extents, Sse.And(plane5, minusZero)));
-        Vector128<float> dist5 = Sse41.DotProduct(plane5, offset5, 0xff);
-
-        // Combine plane distance signs
-        Vector128<float> combined = Sse.Or(Sse.Or(Sse.Or(dist0, dist1), Sse.Or(dist2, dist3)), Sse.Or(dist4, dist5));
+        Vector128<float> plane5 = (row3 - row2);
+        Vector128<float> offset5 = (center + (extents ^ (plane5 & minusZero)));
+        combined |= BitConverter.SingleToInt32Bits(Vector128.Dot(plane5, offset5));
 
         // Can't use Avx.TestZ or _mm_comile_ss here because the OR's above created garbage in the non-sign bits
-        if (Sse.MoveMask(combined) != 0)
+        if (combined < 0)
         {
             needsClipping = false;
             return false;
@@ -137,9 +134,9 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         Vector128<float> col3 = Sse.LoadVector128(m_modelViewProjection + 12);
 
         // Transform edges
-        Vector128<float> egde0 = Sse.Multiply(col0, Avx2.BroadcastScalarToVector128(extents));
-        Vector128<float> egde1 = Sse.Multiply(col1, Avx.Permute(extents, 0b01_01_01_01));
-        Vector128<float> egde2 = Sse.Multiply(col2, Avx.Permute(extents, 0b10_10_10_10));
+        Vector128<float> egde0 = col0 * Avx2.BroadcastScalarToVector128(extents);
+        Vector128<float> egde1 = col1 * Avx.Permute(extents, 0b01_01_01_01);
+        Vector128<float> egde2 = col2 * Avx.Permute(extents, 0b10_10_10_10);
 
         Vector128<float> corners0;
         Vector128<float> corners1;
@@ -158,15 +155,15 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                 col3)));
 
         // Transform remaining corners by adding edge vectors
-        corners1 = Sse.Add(corners0, egde0);
-        corners2 = Sse.Add(corners0, egde1);
-        corners4 = Sse.Add(corners0, egde2);
+        corners1 = corners0 + egde0;
+        corners2 = corners0 + egde1;
+        corners4 = corners0 + egde2;
+                   
+        corners3 = corners1 + egde1;
+        corners5 = corners4 + egde0;
+        corners6 = corners2 + egde2;
 
-        corners3 = Sse.Add(corners1, egde1);
-        corners5 = Sse.Add(corners4, egde0);
-        corners6 = Sse.Add(corners2, egde2);
-
-        corners7 = Sse.Add(corners6, egde0);
+        corners7 = corners6 + egde0;
 
         // Transpose into SoA
         (corners0, corners1, corners2, corners3) = _MM_TRANSPOSE4_PS(corners0, corners1, corners2, corners3);
@@ -175,8 +172,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         // Even if all bounding box corners have W > 0 here, we may end up with some vertices with W < 0 to due floating point differences; so test with some epsilon if any W < 0.
         Vector128<float> maxExtent = Sse.Max(extents, Avx.Permute(extents, 0b01_00_11_10));
         maxExtent = Sse.Max(maxExtent, Avx.Permute(maxExtent, 0b10_11_00_01));
-        Vector128<float> nearPlaneEpsilon = Sse.Multiply(maxExtent, Vector128.Create(0.001f));
-        Vector128<float> closeToNearPlane = Sse.Or(Sse.CompareLessThan(corners3, nearPlaneEpsilon), Sse.CompareLessThan(corners7, nearPlaneEpsilon));
+        Vector128<float> nearPlaneEpsilon = (maxExtent * Vector128.Create(0.001f));
+        Vector128<float> closeToNearPlane = (Vector128.LessThan(corners3, nearPlaneEpsilon) | Vector128.LessThan(corners7, nearPlaneEpsilon));
         if (!Avx.TestZ(closeToNearPlane, closeToNearPlane))
         {
             needsClipping = true;
@@ -187,14 +184,14 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
         // Perspective division
         corners3 = Sse.Reciprocal(corners3);
-        corners0 = Sse.Multiply(corners0, corners3);
-        corners1 = Sse.Multiply(corners1, corners3);
-        corners2 = Sse.Multiply(corners2, corners3);
+        corners0 *= corners3;
+        corners1 *= corners3;
+        corners2 *= corners3;
 
         corners7 = Sse.Reciprocal(corners7);
-        corners4 = Sse.Multiply(corners4, corners7);
-        corners5 = Sse.Multiply(corners5, corners7);
-        corners6 = Sse.Multiply(corners6, corners7);
+        corners4 *= corners7;
+        corners5 *= corners7;
+        corners6 *= corners7;
 
         // Vertical mins and maxes
         Vector128<float> minsX = Sse.Min(corners0, corners4);
@@ -212,7 +209,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         maxsXY = Sse.Min(maxsXY, Vector128.Create(m_width - 1f, m_height - 1f, m_width - 1f, m_height - 1f));
 
         // Negate maxes so we can round in the same direction
-        maxsXY = Sse.Xor(maxsXY, minusZero);
+        maxsXY ^= minusZero;
 
         // Horizontal reduction, step 2
         Vector128<float> boundsF = Sse.Min(Sse.UnpackLow(minsXY, maxsXY), Sse.UnpackHigh(minsXY, maxsXY));
@@ -221,13 +218,13 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         Vector128<int> boundsI = Sse2.ConvertToVector128Int32WithTruncation(Sse41.RoundToNegativeInfinity(boundsF));
 
         // Store as scalars
-        int* bounds = stackalloc int[4];
-        Sse2.Store(bounds, boundsI);
+        Span<uint> bounds = stackalloc uint[4];
+        boundsI.AsUInt32().CopyTo(bounds);
 
-        uint minX = (uint)bounds[0];
-        uint maxX = (uint)bounds[1];
-        uint minY = (uint)bounds[2];
-        uint maxY = (uint)bounds[3];
+        uint minX = bounds[0];
+        uint maxX = bounds[1];
+        uint minY = bounds[2];
+        uint maxY = bounds[3];
 
         // Revert the sign change we did for the maxes
         maxX = (uint)-(int)maxX;
@@ -241,8 +238,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
         Vector128<ushort> depth = packDepthPremultiplied(corners2, corners6);
 
-        ushort maxZ = (ushort)(0xFFFFu ^ Sse2.Extract(Sse41.MinHorizontal(Sse2.Xor(depth, Vector128.Create((short)-1).AsUInt16())), 0));
-
+        ushort maxZ = (ushort)(0xFFFFu ^ V128Helper.MinHorizontal(depth ^ Vector128<ushort>.AllBitsSet));
+        
         if (!query2D(minX, maxX, minY, maxY, maxZ))
         {
             return false;
@@ -302,9 +299,9 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                 {
                     Vector128<int> rowDepth = *pRowDepth++;
 
-                    Vector128<int> notVisible = Sse2.CompareEqual(Sse41.Min(rowDepth.AsUInt16(), maxZV), maxZV).AsInt32();
+                    Vector128<int> notVisible = Vector128.Equals(Vector128.Min(rowDepth.AsUInt16(), maxZV), maxZV).AsInt32();
 
-                    uint visiblePixelMask = (uint)~Sse2.MoveMask(notVisible.AsByte());
+                    uint visiblePixelMask = ~notVisible.AsByte().ExtractMostSignificantBits();
 
                     if ((rowSelector & visiblePixelMask) != 0)
                     {
@@ -356,10 +353,10 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                 {
                     Vector128<int> depthI = Sse2.LoadAlignedVector128((int*)source++);
 
-                    Vector256<int> depthI256 = Avx2.ShiftLeftLogical(Avx2.ConvertToVector256Int32(depthI.AsUInt16()), 12);
-                    Vector256<float> depth = Avx.Multiply(depthI256.AsSingle(), vBias);
+                    Vector256<int> depthI256 = (Avx2.ConvertToVector256Int32(depthI.AsUInt16()) << 12);
+                    Vector256<float> depth = (depthI256.AsSingle() * vBias);
 
-                    Vector256<float> linDepth = Avx.Divide(vDiv, Avx.Subtract(vSt, Avx.Multiply(Avx.Subtract(vOne, depth), vSf)));
+                    Vector256<float> linDepth = (vDiv / (vSt - ((vOne - depth) * vSf)));
                     Avx.StoreAligned((float*)(linDepthA + y), linDepth);
                 }
 
@@ -374,13 +371,13 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                     Vector256<float> depth2 = Avx.LoadAlignedVector256((float*)(linDepthA + y + 2));
                     Vector256<float> depth3 = Avx.LoadAlignedVector256((float*)(linDepthA + y + 3));
 
-                    Vector256<int> vR32_0 = Avx.ConvertToVector256Int32WithTruncation(Avx.Multiply(depth0, vRcp100));
-                    Vector256<int> vR32_1 = Avx.ConvertToVector256Int32WithTruncation(Avx.Multiply(depth1, vRcp100));
-                    Vector256<int> vR32_2 = Avx.ConvertToVector256Int32WithTruncation(Avx.Multiply(depth2, vRcp100));
-                    Vector256<int> vR32_3 = Avx.ConvertToVector256Int32WithTruncation(Avx.Multiply(depth3, vRcp100));
+                    Vector256<int> vR32_0 = Avx.ConvertToVector256Int32WithTruncation(depth0 * vRcp100);
+                    Vector256<int> vR32_1 = Avx.ConvertToVector256Int32WithTruncation(depth1 * vRcp100);
+                    Vector256<int> vR32_2 = Avx.ConvertToVector256Int32WithTruncation(depth2 * vRcp100);
+                    Vector256<int> vR32_3 = Avx.ConvertToVector256Int32WithTruncation(depth3 * vRcp100);
 
-                    Vector256<ushort> vR16_0 = Avx2.And(Avx2.PackUnsignedSaturate(vR32_0, vR32_1), vMask);
-                    Vector256<ushort> vR16_1 = Avx2.And(Avx2.PackUnsignedSaturate(vR32_2, vR32_3), vMask);
+                    Vector256<ushort> vR16_0 = Avx2.PackUnsignedSaturate(vR32_0, vR32_1) & vMask;
+                    Vector256<ushort> vR16_1 = Avx2.PackUnsignedSaturate(vR32_2, vR32_3) & vMask;
                     Vector256<byte> vR8 = Avx2.PackUnsignedSaturate(vR16_0.AsInt16(), vR16_1.AsInt16());
 
                     Vector256<int> vG32_0 = Avx.ConvertToVector256Int32WithTruncation(depth0);
@@ -388,8 +385,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                     Vector256<int> vG32_2 = Avx.ConvertToVector256Int32WithTruncation(depth2);
                     Vector256<int> vG32_3 = Avx.ConvertToVector256Int32WithTruncation(depth3);
 
-                    Vector256<ushort> vG16_0 = Avx2.And(Avx2.PackUnsignedSaturate(vG32_0, vG32_1), vMask);
-                    Vector256<ushort> vG16_1 = Avx2.And(Avx2.PackUnsignedSaturate(vG32_2, vG32_3), vMask);
+                    Vector256<ushort> vG16_0 = Avx2.PackUnsignedSaturate(vG32_0, vG32_1) & vMask;
+                    Vector256<ushort> vG16_1 = Avx2.PackUnsignedSaturate(vG32_2, vG32_3) & vMask;
                     Vector256<byte> vG8 = Avx2.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
 
                     Vector256<ushort> vRG_Lo = Avx2.UnpackLow(vR8, vG8).AsUInt16();
@@ -530,9 +527,9 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
               Fma.MultiplyAdd(mat2, Avx.Permute(boundsMin, 0b10_10_10_10),
                 mat3)));
 
-        mat0 = (mat0 * (Avx2.BroadcastScalarToVector128(boundsExtents) * Vector128.Create(1.0f / (2047ul << 21))));
-        mat1 = (mat1 * (Avx.Permute(boundsExtents, 0b01_01_01_01) * Vector128.Create(1.0f / (2047 << 10))));
-        mat2 = (mat2 * (Avx.Permute(boundsExtents, 0b10_10_10_10) * Vector128.Create(1.0f / 1023)));
+        mat0 *= (Avx2.BroadcastScalarToVector128(boundsExtents) * Vector128.Create(1.0f / (2047ul << 21)));
+        mat1 *= (Avx.Permute(boundsExtents, 0b01_01_01_01) * Vector128.Create(1.0f / (2047 << 10)));
+        mat2 *= (Avx.Permute(boundsExtents, 0b10_10_10_10) * Vector128.Create(1.0f / 1023));
 
         // Bias X coordinate back into positive range
         mat3 = Fma.MultiplyAdd(mat0, Vector128.Create((float)(1024ul << 21)), mat3);
@@ -546,14 +543,14 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         // Due to linear relationship between Z and W, it's cheaper to compute Z from W later in the pipeline than using the full projection matrix up front
         float c0, c1;
         {
-            Vector128<float> Za = Avx.Permute(mat2, 0b11_11_11_11);
-            Vector128<float> Zb = Sse41.DotProduct(mat2, Vector128.Create((float)(1 << 21), 1 << 10, 1, 1), 0xFF);
+            float Za = mat2.GetElement(3);
+            float Zb = Vector128.Dot(mat2, Vector128.Create((float)(1 << 21), 1 << 10, 1, 1));
 
-            Vector128<float> Wa = Avx.Permute(mat3, 0b11_11_11_11);
-            Vector128<float> Wb = Sse41.DotProduct(mat3, Vector128.Create((float)(1 << 21), 1 << 10, 1, 1), 0xFF);
+            float Wa = mat3.GetElement(3);
+            float Wb = Vector128.Dot(mat3, Vector128.Create((float)(1 << 21), 1 << 10, 1, 1));
 
-            c0 = ((Za - Zb) / (Wa - Wb)).ToScalar();
-            c1 = Fma.MultiplyAddNegated(((Za - Zb) / (Wa - Wb)), Wa, Za).ToScalar();
+            c0 = ((Za - Zb) / (Wa - Wb));
+            c1 = Fma.MulAddNeg((Za - Zb) / (Wa - Wb), Wa, Za);
         }
 
         const int alignment = 256 / 8;
@@ -692,9 +689,9 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<float> edgeNormalsY2 = x2 - x3;
             Vector256<float> edgeNormalsY3 = x3 - x0;
 
-            Vector256<float> area0 = Fma.MultiplySubtract(edgeNormalsX0, edgeNormalsY1, Avx.Multiply(edgeNormalsX1, edgeNormalsY0));
-            Vector256<float> area1 = Fma.MultiplySubtract(edgeNormalsX1, edgeNormalsY2, Avx.Multiply(edgeNormalsX2, edgeNormalsY1));
-            Vector256<float> area2 = Fma.MultiplySubtract(edgeNormalsX2, edgeNormalsY3, Avx.Multiply(edgeNormalsX3, edgeNormalsY2));
+            Vector256<float> area0 = Fma.MultiplySubtract(edgeNormalsX0, edgeNormalsY1, (edgeNormalsX1 * edgeNormalsY0));
+            Vector256<float> area1 = Fma.MultiplySubtract(edgeNormalsX1, edgeNormalsY2, (edgeNormalsX2 * edgeNormalsY1));
+            Vector256<float> area2 = Fma.MultiplySubtract(edgeNormalsX2, edgeNormalsY3, (edgeNormalsX3 * edgeNormalsY2));
             Vector256<float> area3 = (area0 + area2) - area1;
 
             Vector256<float> minusZero256 = Vector256.Create(-0.0f);
@@ -720,7 +717,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             if (T.PossiblyNearClipped)
             {
                 // Flip areas for each vertex with W < 0. This needs to be done before comparison against 0 rather than afterwards to make sure zero-are triangles are handled correctly.
-                areaSign0 = Avx.Compare(Avx.Xor(Avx.Xor(area0, wSign0), Avx.Xor(wSign1, wSign2)), Vector256<float>.Zero, _CMP_LE_OQ);
+                areaSign0 = Avx.Compare(((area0 ^ wSign0) ^ (wSign1 ^ wSign2)), Vector256<float>.Zero, _CMP_LE_OQ);
                 areaSign1 = minusZero256 & Avx.Compare((area1 ^ wSign1) ^ (wSign2 ^ wSign3), Vector256<float>.Zero, _CMP_LE_OQ);
                 areaSign2 = minusZero256 & Avx.Compare((area2 ^ wSign0) ^ (wSign2 ^ wSign3), Vector256<float>.Zero, _CMP_LE_OQ);
                 areaSign3 = minusZero256 & Avx.Compare((area3 ^ wSign1) ^ (wSign0 ^ wSign3), Vector256<float>.Zero, _CMP_LE_OQ);
@@ -1108,8 +1105,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
               ++blockY,
               pPrimitiveHiZ += blocksX,
               pPrimitiveOut += 4 * blocksX,
-              lineDepth = Avx.Add(lineDepth, depthDy),
-              lineOffset = Sse.Add(lineOffset, edgeNormalY))
+              lineDepth += depthDy,
+              lineOffset += edgeNormalY)
             {
                 ushort* pBlockRowHiZ = pPrimitiveHiZ;
                 Vector256<int>* @out = pPrimitiveOut;
@@ -1123,8 +1120,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                   ++blockX,
                   pBlockRowHiZ += 1,
                   @out += 4,
-                  depth = Avx.Add(depthDx, depth),
-                  offset = Sse.Add(edgeNormalX, offset))
+                  depth = (depthDx + depth),
+                  offset = (edgeNormalX + offset))
                 {
                     ushort hiZ = *pBlockRowHiZ;
                     if (hiZ >= primitiveMaxZ)
@@ -1151,7 +1148,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
                         Vector128<int> offsetClamped = Sse41.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero);
 
-                        Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
+                        Vector128<int> lookup = (slopeLookup | offsetClamped);
 
                         // Generate block mask
                         ulong A = pTable[(uint)lookup.GetElement(0)];
@@ -1166,7 +1163,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                     else
                     {
                         Vector128<int> offsetClamped = Sse41.Min(Sse41.Max(Sse2.ConvertToVector128Int32WithTruncation(offset), Vector128<int>.Zero), Vector128.Create(OFFSET_QUANTIZATION_FACTOR - 1));
-                        Vector128<int> lookup = Sse2.Or(slopeLookup, offsetClamped);
+                        Vector128<int> lookup = (slopeLookup | offsetClamped);
 
                         // Generate block mask
                         ulong A = pTable[(uint)lookup.GetElement(0)];
@@ -1217,8 +1214,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                     // Generate depth values around block
                     Vector256<float> depth0 = depth;
                     Vector256<float> depth1 = Fma.MultiplyAdd(depthDx, Vector256.Create(0.5f), depth0);
-                    Vector256<float> depth8 = Avx.Add(depthDy, depth0);
-                    Vector256<float> depth9 = Avx.Add(depthDy, depth1);
+                    Vector256<float> depth8 = depthDy + depth0;
+                    Vector256<float> depth9 = depthDy + depth1;
 
                     // Pack depth
                     Vector256<ushort> d0 = packDepthPremultiplied(depth0, depth1);
@@ -1233,13 +1230,13 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                     if (blockMask != 0xffff_ffff_ffff_ffff)
                     {
                         Vector128<int> A = Vector128.CreateScalar((long)blockMask).AsInt32();
-                        Vector128<int> B = Sse2.ShiftLeftLogical(A.AsInt16(), 4).AsInt32();
+                        Vector128<int> B = (A.AsInt16() << 4).AsInt32();
                         Vector256<int> C = Avx2.InsertVector128(A.ToVector256Unsafe(), B, 1);
                         Vector256<short> rowMask = Avx2.UnpackLow(C.AsByte(), C.AsByte()).AsInt16();
 
-                        d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), Avx2.ShiftLeftLogical(rowMask, 3).AsByte()).AsUInt16();
-                        d1 = Avx2.BlendVariable(Vector256<byte>.Zero, d1.AsByte(), Avx2.ShiftLeftLogical(rowMask, 2).AsByte()).AsUInt16();
-                        d2 = Avx2.BlendVariable(Vector256<byte>.Zero, d2.AsByte(), Avx2.Add(rowMask, rowMask).AsByte()).AsUInt16();
+                        d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), (rowMask << 3).AsByte()).AsUInt16();
+                        d1 = Avx2.BlendVariable(Vector256<byte>.Zero, d1.AsByte(), (rowMask << 2).AsByte()).AsUInt16();
+                        d2 = Avx2.BlendVariable(Vector256<byte>.Zero, d2.AsByte(), (rowMask + rowMask).AsByte()).AsUInt16();
                         d3 = Avx2.BlendVariable(Vector256<byte>.Zero, d3.AsByte(), rowMask.AsByte()).AsUInt16();
                     }
 

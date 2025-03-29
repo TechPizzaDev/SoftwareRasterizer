@@ -11,7 +11,7 @@ using V128 = Vector128;
 using static VectorMath;
 
 public unsafe class V128Rasterizer<Fma> : Rasterizer
-    where Fma : IFusedMultiplyAdd128
+    where Fma : IMultiplyAdd, IFusedMultiplyAdd128
 {
     private const int Alignment = 128 / 8; // sizeof(Vector128<>)
 
@@ -177,14 +177,14 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
         // Perspective division
         corners3 = V128Helper.Reciprocal(corners3);
-        corners0 = (corners0 * corners3);
-        corners1 = (corners1 * corners3);
-        corners2 = (corners2 * corners3);
+        corners0 *= corners3;
+        corners1 *= corners3;
+        corners2 *= corners3;
 
         corners7 = V128Helper.Reciprocal(corners7);
-        corners4 = (corners4 * corners7);
-        corners5 = (corners5 * corners7);
-        corners6 = (corners6 * corners7);
+        corners4 *= corners7;
+        corners5 *= corners7;
+        corners6 *= corners7;
 
         // Vertical mins and maxes
         Vector128<float> minsX = V128.Min(corners0, corners4);
@@ -202,7 +202,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         maxsXY = V128.Min(maxsXY, V128.Create(m_width - 1f, m_height - 1f, m_width - 1f, m_height - 1f));
 
         // Negate maxes so we can round in the same direction
-        maxsXY = maxsXY ^ minusZero;
+        maxsXY ^= minusZero;
 
         // Horizontal reduction, step 2
         Vector128<float> boundsF = V128.Min(V128Helper.UnpackLow(minsXY, maxsXY), V128Helper.UnpackHigh(minsXY, maxsXY));
@@ -460,8 +460,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<float> invLen = V128Helper.Reciprocal((V128.AndNot(nx, minusZero) + V128.AndNot(ny, minusZero)));
 
         invLen = (mul * invLen);
-        nx = (nx * invLen);
-        ny = (ny * invLen);
+        nx *= invLen;
+        ny *= invLen;
 
         return (nx, ny);
     }
@@ -516,30 +516,30 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
               Fma.MultiplyAdd(mat2, V128Helper.PermuteFrom2(boundsMin),
                 mat3)));
 
-        mat0 = (mat0 * (V128Helper.PermuteFrom0(boundsExtents) * V128.Create(1.0f / (2047ul << 21))));
-        mat1 = (mat1 * (V128Helper.PermuteFrom1(boundsExtents) * V128.Create(1.0f / (2047 << 10))));
-        mat2 = (mat2 * (V128Helper.PermuteFrom2(boundsExtents) * V128.Create(1.0f / 1023)));
+        mat0 *= (V128Helper.PermuteFrom0(boundsExtents) * V128.Create(1.0f / (2047ul << 21)));
+        mat1 *= (V128Helper.PermuteFrom1(boundsExtents) * V128.Create(1.0f / (2047 << 10)));
+        mat2 *= (V128Helper.PermuteFrom2(boundsExtents) * V128.Create(1.0f / 1023));
 
         // Bias X coordinate back into positive range
         mat3 = Fma.MultiplyAdd(mat0, V128.Create((float)(1024ul << 21)), mat3);
 
         // Skew projection to correct bleeding of Y and Z into X due to lack of masking
-        mat1 = (mat1 - mat0);
-        mat2 = (mat2 - mat0);
+        mat1 -= mat0;
+        mat2 -= mat0;
 
         (mat0, mat1, mat2, mat3) = _MM_TRANSPOSE4_PS(mat0, mat1, mat2, mat3);
 
         // Due to linear relationship between Z and W, it's cheaper to compute Z from W later in the pipeline than using the full projection matrix up front
         float c0, c1;
         {
-            Vector128<float> Za = V128Helper.PermuteFrom3(mat2);
-            Vector128<float> Zb = V128.Create(V128.Dot(mat2, V128.Create((float)(1 << 21), 1 << 10, 1, 1)));
+            float Za = mat2.GetElement(3);
+            float Zb = V128.Dot(mat2, V128.Create((float)(1 << 21), 1 << 10, 1, 1));
 
-            Vector128<float> Wa = V128Helper.PermuteFrom3(mat3);
-            Vector128<float> Wb = V128.Create(V128.Dot(mat3, V128.Create((float)(1 << 21), 1 << 10, 1, 1)));
+            float Wa = mat3.GetElement(3);
+            float Wb = V128.Dot(mat3, V128.Create((float)(1 << 21), 1 << 10, 1, 1));
 
-            c0 = ((Za - Zb) / (Wa - Wb)).ToScalar();
-            c1 = Fma.MultiplyAddNegated(((Za - Zb) / (Wa - Wb)), Wa, Za).ToScalar();
+            c0 = (Za - Zb) / (Wa - Wb);
+            c1 = Fma.MulAddNeg((Za - Zb) / (Wa - Wb), Wa, Za);
         }
 
         const int alignment = 256 / 8;
@@ -657,8 +657,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         Vector128<float> mat0,
         Vector128<float> mat1,
         Vector128<float> mat3,
-        float c0,
-        float c1,
+        in float c0,
+        in float c1,
         Vector128<int>* vertexData,
         uint* primModes,
         uint* firstBlocks,
@@ -964,7 +964,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
             return 2;
         }
 
-        overlappedPrimitiveValidMask = V128.ExtractMostSignificantBits(overlappedPrimitiveValid.AsSingle());
+        overlappedPrimitiveValidMask = overlappedPrimitiveValid.ExtractMostSignificantBits();
 
         // Convert bounds from [min, max] to [min, range]
         Vector128<int> rangeX = maxX - minX;
@@ -1022,8 +1022,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         depthPlane1 = (invArea * V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, (z12 * edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, (z30 * edgeNormalsX4)), greaterArea));
         depthPlane2 = (invArea * V128Helper.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, (z12 * edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, (z30 * edgeNormalsY4)), greaterArea));
 
-        x0 = (x0 - V128.ConvertToSingle(minX));
-        y0 = (y0 - V128.ConvertToSingle(minY));
+        x0 -= V128.ConvertToSingle(minX);
+        y0 -= V128.ConvertToSingle(minY);
 
         depthPlane0 = Fma.MultiplyAddNegated(x0, depthPlane1, Fma.MultiplyAddNegated(y0, depthPlane2, z0));
 
@@ -1180,9 +1180,9 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
               ++blockY,
               pPrimitiveHiZ += blocksX,
               pPrimitiveOut += 8 * blocksX,
-              lineDepthA = lineDepthA + depthDy,
-              lineDepthB = lineDepthB + depthDy,
-              lineOffset = lineOffset + edgeNormalY)
+              lineDepthA += depthDy,
+              lineDepthB += depthDy,
+              lineOffset += edgeNormalY)
             {
                 ushort* pBlockRowHiZ = pPrimitiveHiZ;
                 Vector128<int>* @out = pPrimitiveOut;
