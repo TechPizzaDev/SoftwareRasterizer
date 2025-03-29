@@ -15,7 +15,7 @@ public static class VectorMath
     {
         Vector128<float> a_yzx = Vector128.Shuffle(a, Vector128.Create(1, 2, 0, 3));
         Vector128<float> b_yzx = Vector128.Shuffle(b, Vector128.Create(1, 2, 0, 3));
-        Vector128<float> c = Vector128.Subtract(Vector128.Multiply(a, b_yzx), Vector128.Multiply(a_yzx, b));
+        Vector128<float> c = ((a * b_yzx) - (a_yzx * b));
         return Vector128.Shuffle(c, Vector128.Create(1, 2, 0, 3));
     }
 
@@ -23,13 +23,13 @@ public static class VectorMath
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> normal(Vector128<float> v0, Vector128<float> v1, Vector128<float> v2)
     {
-        return cross(Vector128.Subtract(v1, v0), Vector128.Subtract(v2, v0));
+        return cross((v1 - v0), (v2 - v0));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> normalize(Vector128<float> v)
     {
-        return Vector128.Multiply(v, V128Helper.ReciprocalSqrt(V128Helper.DotProduct_x7F(v, v)));
+        return (v * V128Helper.ReciprocalSqrt(V128Helper.DotProduct_x7F(v, v)));
     }
 
     // Normal vector of triangle
@@ -46,8 +46,8 @@ public static class VectorMath
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void _MM_TRANSPOSE4_PS(
-        ref Vector128<float> row0, ref Vector128<float> row1, ref Vector128<float> row2, ref Vector128<float> row3)
+    public static (Vector128<float>, Vector128<float>, Vector128<float>, Vector128<float>) _MM_TRANSPOSE4_PS(
+        Vector128<float> row0, Vector128<float> row1, Vector128<float> row2, Vector128<float> row3)
     {
         if (Sse.IsSupported)
         {
@@ -73,6 +73,7 @@ public static class VectorMath
             row2 = Vector128.Create(t0.Z, t1.Z, t2.Z, t3.Z);
             row3 = Vector128.Create(t0.W, t1.W, t2.W, t3.W);
         }
+        return (row0, row1, row2, row3);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

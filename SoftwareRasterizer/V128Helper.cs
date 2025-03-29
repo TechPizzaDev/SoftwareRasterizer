@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
@@ -25,8 +24,8 @@ public static class V128Helper
         {
             (Vector128<uint> lo_l, Vector128<uint> hi_l) = Vector128.Widen(left);
             (Vector128<uint> lo_r, Vector128<uint> hi_r) = Vector128.Widen(right);
-            Vector128<uint> lo = Vector128.ShiftRightLogical(Vector128.Add(lo_l, lo_r), 1);
-            Vector128<uint> hi = Vector128.ShiftRightLogical(Vector128.Add(hi_l, hi_r), 1);
+            Vector128<uint> lo = ((lo_l + lo_r) >>> 1);
+            Vector128<uint> hi = ((hi_l + hi_r) >>> 1);
             return Vector128.Narrow(lo, hi);
         }
     }
@@ -56,7 +55,7 @@ public static class V128Helper
         }
         else
         {
-            Vector128<float> c = Vector128.ShiftRightArithmetic(mask.AsInt32(), 31).AsSingle();
+            Vector128<float> c = (mask.AsInt32() >> 31).AsSingle();
             return Vector128.ConditionalSelect(c, right, left);
         }
     }
@@ -70,7 +69,7 @@ public static class V128Helper
         }
         else
         {
-            Vector128<byte> c = Vector128.ShiftRightArithmetic(mask.AsSByte(), 7).AsByte();
+            Vector128<byte> c = (mask.AsSByte() >> 7).AsByte();
             return Vector128.ConditionalSelect(c, right, left);
         }
     }
@@ -258,7 +257,7 @@ public static class V128Helper
         }
         else
         {
-            return Vector128.Divide(Vector128.Create(1f), Vector128.Sqrt(value));
+            return Vector128.Create(1f) / Vector128.Sqrt(value);
         }
     }
 
@@ -302,7 +301,7 @@ public static class V128Helper
         }
         else
         {
-            return Vector128.Divide(Vector128.Create(1f), value);
+            return Vector128.Create(1f) / value;
         }
     }
 
@@ -320,6 +319,9 @@ public static class V128Helper
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> RoundToNearestInteger(Vector128<float> value)
     {
+#if NET9_0_OR_GREATER
+        return Vector128.Round(value);
+#else
         if (Sse41.IsSupported)
         {
             return Sse41.RoundToNearestInteger(value);
@@ -342,6 +344,7 @@ public static class V128Helper
             }
             return result;
         }
+#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -12,36 +12,36 @@ public readonly struct FmaIntrinsic : IFusedMultiplyAdd128, IFusedMultiplyAdd256
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> MultiplyAdd(Vector128<float> a, Vector128<float> b, Vector128<float> c)
     {
-        return Vector128.Add(Vector128.Multiply(a, b), c);
+        return ((a * b) + c);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector256<float> MultiplyAdd(Vector256<float> a, Vector256<float> b, Vector256<float> c)
     {
-        return Vector256.Add(Vector256.Multiply(a, b), c);
+        return ((a * b) + c);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> MultiplyAddNegated(Vector128<float> a, Vector128<float> b, Vector128<float> c)
     {
-        return Vector128.Subtract(c, Vector128.Multiply(a, b));
+        return (c - (a * b));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector256<float> MultiplyAddNegated(Vector256<float> a, Vector256<float> b, Vector256<float> c)
     {
-        return Vector256.Subtract(c, Vector256.Multiply(a, b));
+        return (c - (a * b));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> MultiplySubtract(Vector128<float> a, Vector128<float> b, Vector128<float> c)
     {
-        return Vector128.Subtract(Vector128.Multiply(a, b), c);
+        return ((a * b) - c);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector256<float> MultiplySubtract(Vector256<float> a, Vector256<float> b, Vector256<float> c)
     {
-        return Vector256.Subtract(Vector256.Multiply(a, b), c);
+        return ((a * b) - c);
     }
 }
