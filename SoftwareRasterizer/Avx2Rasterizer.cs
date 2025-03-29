@@ -9,7 +9,7 @@ namespace SoftwareRasterizer;
 using static VectorMath;
 
 public unsafe class Avx2Rasterizer<Fma> : Rasterizer
-    where Fma : IMultiplyAdd, IFusedMultiplyAdd128, IFusedMultiplyAdd256
+    where Fma : IMultiplyAdd, IMultiplyAdd128, IMultiplyAdd256
 {
     private const FloatComparisonMode _CMP_LT_OQ = FloatComparisonMode.OrderedLessThanNonSignaling;
     private const FloatComparisonMode _CMP_LE_OQ = FloatComparisonMode.OrderedLessThanOrEqualNonSignaling;
@@ -149,9 +149,9 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
         // Transform first corner
         corners0 =
-          Fma.MultiplyAdd(col0, Avx2.BroadcastScalarToVector128(boundsMin),
-            Fma.MultiplyAdd(col1, Avx.Permute(boundsMin, 0b01_01_01_01),
-              Fma.MultiplyAdd(col2, Avx.Permute(boundsMin, 0b10_10_10_10),
+          Fma.MulAdd(col0, Avx2.BroadcastScalarToVector128(boundsMin),
+            Fma.MulAdd(col1, Avx.Permute(boundsMin, 0b01_01_01_01),
+              Fma.MulAdd(col2, Avx.Permute(boundsMin, 0b10_10_10_10),
                 col3)));
 
         // Transform remaining corners by adding edge vectors
@@ -476,7 +476,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         const float mul = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f / ((OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
         const float add = (SLOPE_QUANTIZATION_FACTOR / 2 - 1) * 0.5f + 0.5f;
 
-        Vector256<int> quantizedSlope = Avx.ConvertToVector256Int32WithTruncation(Fma.MultiplyAdd(nx, Vector256.Create(mul), Vector256.Create(add)));
+        Vector256<int> quantizedSlope = Avx.ConvertToVector256Int32WithTruncation(Fma.MulAdd(nx, Vector256.Create(mul), Vector256.Create(add)));
         return ((quantizedSlope << 1) - yNeg) << OFFSET_QUANTIZATION_BITS;
     }
 
@@ -522,9 +522,9 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
         // Bake integer => bounding box transform into matrix
         mat3 =
-          Fma.MultiplyAdd(mat0, Avx2.BroadcastScalarToVector128(boundsMin),
-            Fma.MultiplyAdd(mat1, Avx.Permute(boundsMin, 0b01_01_01_01),
-              Fma.MultiplyAdd(mat2, Avx.Permute(boundsMin, 0b10_10_10_10),
+          Fma.MulAdd(mat0, Avx2.BroadcastScalarToVector128(boundsMin),
+            Fma.MulAdd(mat1, Avx.Permute(boundsMin, 0b01_01_01_01),
+              Fma.MulAdd(mat2, Avx.Permute(boundsMin, 0b10_10_10_10),
                 mat3)));
 
         mat0 *= (Avx2.BroadcastScalarToVector128(boundsExtents) * Vector128.Create(1.0f / (2047ul << 21)));
@@ -532,7 +532,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
         mat2 *= (Avx.Permute(boundsExtents, 0b10_10_10_10) * Vector128.Create(1.0f / 1023));
 
         // Bias X coordinate back into positive range
-        mat3 = Fma.MultiplyAdd(mat0, Vector128.Create((float)(1024ul << 21)), mat3);
+        mat3 = Fma.MulAdd(mat0, Vector128.Create((float)(1024ul << 21)), mat3);
 
         // Skew projection to correct bleeding of Y and Z into X due to lack of masking
         mat1 -= mat0;
@@ -622,30 +622,30 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<float> mat02 = Vector256.Create(mat0.GetElement(2));
             Vector256<float> mat03 = Vector256.Create(mat0.GetElement(3));
 
-            Vector256<float> X0 = Fma.MultiplyAdd(Xf0, mat00, Fma.MultiplyAdd(Yf0, mat01, Fma.MultiplyAdd(Zf0, mat02, mat03)));
-            Vector256<float> X1 = Fma.MultiplyAdd(Xf1, mat00, Fma.MultiplyAdd(Yf1, mat01, Fma.MultiplyAdd(Zf1, mat02, mat03)));
-            Vector256<float> X2 = Fma.MultiplyAdd(Xf2, mat00, Fma.MultiplyAdd(Yf2, mat01, Fma.MultiplyAdd(Zf2, mat02, mat03)));
-            Vector256<float> X3 = Fma.MultiplyAdd(Xf3, mat00, Fma.MultiplyAdd(Yf3, mat01, Fma.MultiplyAdd(Zf3, mat02, mat03)));
+            Vector256<float> X0 = Fma.MulAdd(Xf0, mat00, Fma.MulAdd(Yf0, mat01, Fma.MulAdd(Zf0, mat02, mat03)));
+            Vector256<float> X1 = Fma.MulAdd(Xf1, mat00, Fma.MulAdd(Yf1, mat01, Fma.MulAdd(Zf1, mat02, mat03)));
+            Vector256<float> X2 = Fma.MulAdd(Xf2, mat00, Fma.MulAdd(Yf2, mat01, Fma.MulAdd(Zf2, mat02, mat03)));
+            Vector256<float> X3 = Fma.MulAdd(Xf3, mat00, Fma.MulAdd(Yf3, mat01, Fma.MulAdd(Zf3, mat02, mat03)));
 
             Vector256<float> mat10 = Vector256.Create(mat1.GetElement(0));
             Vector256<float> mat11 = Vector256.Create(mat1.GetElement(1));
             Vector256<float> mat12 = Vector256.Create(mat1.GetElement(2));
             Vector256<float> mat13 = Vector256.Create(mat1.GetElement(3));
 
-            Vector256<float> Y0 = Fma.MultiplyAdd(Xf0, mat10, Fma.MultiplyAdd(Yf0, mat11, Fma.MultiplyAdd(Zf0, mat12, mat13)));
-            Vector256<float> Y1 = Fma.MultiplyAdd(Xf1, mat10, Fma.MultiplyAdd(Yf1, mat11, Fma.MultiplyAdd(Zf1, mat12, mat13)));
-            Vector256<float> Y2 = Fma.MultiplyAdd(Xf2, mat10, Fma.MultiplyAdd(Yf2, mat11, Fma.MultiplyAdd(Zf2, mat12, mat13)));
-            Vector256<float> Y3 = Fma.MultiplyAdd(Xf3, mat10, Fma.MultiplyAdd(Yf3, mat11, Fma.MultiplyAdd(Zf3, mat12, mat13)));
+            Vector256<float> Y0 = Fma.MulAdd(Xf0, mat10, Fma.MulAdd(Yf0, mat11, Fma.MulAdd(Zf0, mat12, mat13)));
+            Vector256<float> Y1 = Fma.MulAdd(Xf1, mat10, Fma.MulAdd(Yf1, mat11, Fma.MulAdd(Zf1, mat12, mat13)));
+            Vector256<float> Y2 = Fma.MulAdd(Xf2, mat10, Fma.MulAdd(Yf2, mat11, Fma.MulAdd(Zf2, mat12, mat13)));
+            Vector256<float> Y3 = Fma.MulAdd(Xf3, mat10, Fma.MulAdd(Yf3, mat11, Fma.MulAdd(Zf3, mat12, mat13)));
 
             Vector256<float> mat30 = Vector256.Create(mat3.GetElement(0));
             Vector256<float> mat31 = Vector256.Create(mat3.GetElement(1));
             Vector256<float> mat32 = Vector256.Create(mat3.GetElement(2));
             Vector256<float> mat33 = Vector256.Create(mat3.GetElement(3));
 
-            Vector256<float> W0 = Fma.MultiplyAdd(Xf0, mat30, Fma.MultiplyAdd(Yf0, mat31, Fma.MultiplyAdd(Zf0, mat32, mat33)));
-            Vector256<float> W1 = Fma.MultiplyAdd(Xf1, mat30, Fma.MultiplyAdd(Yf1, mat31, Fma.MultiplyAdd(Zf1, mat32, mat33)));
-            Vector256<float> W2 = Fma.MultiplyAdd(Xf2, mat30, Fma.MultiplyAdd(Yf2, mat31, Fma.MultiplyAdd(Zf2, mat32, mat33)));
-            Vector256<float> W3 = Fma.MultiplyAdd(Xf3, mat30, Fma.MultiplyAdd(Yf3, mat31, Fma.MultiplyAdd(Zf3, mat32, mat33)));
+            Vector256<float> W0 = Fma.MulAdd(Xf0, mat30, Fma.MulAdd(Yf0, mat31, Fma.MulAdd(Zf0, mat32, mat33)));
+            Vector256<float> W1 = Fma.MulAdd(Xf1, mat30, Fma.MulAdd(Yf1, mat31, Fma.MulAdd(Zf1, mat32, mat33)));
+            Vector256<float> W2 = Fma.MulAdd(Xf2, mat30, Fma.MulAdd(Yf2, mat31, Fma.MulAdd(Zf2, mat32, mat33)));
+            Vector256<float> W3 = Fma.MulAdd(Xf3, mat30, Fma.MulAdd(Yf3, mat31, Fma.MulAdd(Zf3, mat32, mat33)));
 
             Vector256<float> invW0, invW1, invW2, invW3;
             // Clamp W and invert
@@ -689,9 +689,9 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<float> edgeNormalsY2 = x2 - x3;
             Vector256<float> edgeNormalsY3 = x3 - x0;
 
-            Vector256<float> area0 = Fma.MultiplySubtract(edgeNormalsX0, edgeNormalsY1, (edgeNormalsX1 * edgeNormalsY0));
-            Vector256<float> area1 = Fma.MultiplySubtract(edgeNormalsX1, edgeNormalsY2, (edgeNormalsX2 * edgeNormalsY1));
-            Vector256<float> area2 = Fma.MultiplySubtract(edgeNormalsX2, edgeNormalsY3, (edgeNormalsX3 * edgeNormalsY2));
+            Vector256<float> area0 = Fma.MulSub(edgeNormalsX0, edgeNormalsY1, (edgeNormalsX1 * edgeNormalsY0));
+            Vector256<float> area1 = Fma.MulSub(edgeNormalsX1, edgeNormalsY2, (edgeNormalsX2 * edgeNormalsY1));
+            Vector256<float> area2 = Fma.MulSub(edgeNormalsX2, edgeNormalsY3, (edgeNormalsX3 * edgeNormalsY2));
             Vector256<float> area3 = (area0 + area2) - area1;
 
             Vector256<float> minusZero256 = Vector256.Create(-0.0f);
@@ -888,10 +888,10 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<float> C0 = Vector256.Create(c0);
             Vector256<float> C1 = Vector256.Create(c1);
             Vector256<float> z0, z1, z2, z3;
-            z0 = Fma.MultiplyAdd(invW0, C1, C0);
-            z1 = Fma.MultiplyAdd(invW1, C1, C0);
-            z2 = Fma.MultiplyAdd(invW2, C1, C0);
-            z3 = Fma.MultiplyAdd(invW3, C1, C0);
+            z0 = Fma.MulAdd(invW0, C1, C0);
+            z1 = Fma.MulAdd(invW1, C1, C0);
+            z2 = Fma.MulAdd(invW2, C1, C0);
+            z3 = Fma.MulAdd(invW3, C1, C0);
 
             Vector256<float> maxZ = Avx.Max(Avx.Max(z0, z1), Avx.Max(z2, z3));
 
@@ -938,13 +938,13 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<float> edgeNormalsY4 = x2 - x0;
 
             Vector256<float> depthPlane0, depthPlane1, depthPlane2;
-            depthPlane1 = (invArea * Avx.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsX1, (z12 * edgeNormalsX4)), Fma.MultiplyAddNegated(z20, edgeNormalsX3, (z30 * edgeNormalsX4)), greaterArea));
-            depthPlane2 = (invArea * Avx.BlendVariable(Fma.MultiplySubtract(z20, edgeNormalsY1, (z12 * edgeNormalsY4)), Fma.MultiplyAddNegated(z20, edgeNormalsY3, (z30 * edgeNormalsY4)), greaterArea));
+            depthPlane1 = (invArea * Avx.BlendVariable(Fma.MulSub(z20, edgeNormalsX1, (z12 * edgeNormalsX4)), Fma.MulAddNeg(z20, edgeNormalsX3, (z30 * edgeNormalsX4)), greaterArea));
+            depthPlane2 = (invArea * Avx.BlendVariable(Fma.MulSub(z20, edgeNormalsY1, (z12 * edgeNormalsY4)), Fma.MulAddNeg(z20, edgeNormalsY3, (z30 * edgeNormalsY4)), greaterArea));
 
             x0 -= Avx.ConvertToVector256Single(minX);
             y0 -= Avx.ConvertToVector256Single(minY);
 
-            depthPlane0 = Fma.MultiplyAddNegated(x0, depthPlane1, Fma.MultiplyAddNegated(y0, depthPlane2, z0));
+            depthPlane0 = Fma.MulAddNeg(x0, depthPlane1, Fma.MulAddNeg(y0, depthPlane2, z0));
 
             // If mode == Triangle0, replace edge 2 with edge 4; if mode == Triangle1, replace edge 0 with edge 4
             edgeNormalsX2 = Avx.BlendVariable(edgeNormalsX2, edgeNormalsX4, modeTriangle0);
@@ -979,18 +979,18 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<float> add256 = Vector256.Create(0.5f - minEdgeOffset * (OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
             Vector256<float> edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3;
 
-            edgeOffsets0 = Fma.MultiplyAddNegated(x0, edgeNormalsX0, Fma.MultiplyAddNegated(y0, edgeNormalsY0, add256));
-            edgeOffsets1 = Fma.MultiplyAddNegated(x1, edgeNormalsX1, Fma.MultiplyAddNegated(y1, edgeNormalsY1, add256));
-            edgeOffsets2 = Fma.MultiplyAddNegated(x2, edgeNormalsX2, Fma.MultiplyAddNegated(y2, edgeNormalsY2, add256));
-            edgeOffsets3 = Fma.MultiplyAddNegated(x3, edgeNormalsX3, Fma.MultiplyAddNegated(y3, edgeNormalsY3, add256));
+            edgeOffsets0 = Fma.MulAddNeg(x0, edgeNormalsX0, Fma.MulAddNeg(y0, edgeNormalsY0, add256));
+            edgeOffsets1 = Fma.MulAddNeg(x1, edgeNormalsX1, Fma.MulAddNeg(y1, edgeNormalsY1, add256));
+            edgeOffsets2 = Fma.MulAddNeg(x2, edgeNormalsX2, Fma.MulAddNeg(y2, edgeNormalsY2, add256));
+            edgeOffsets3 = Fma.MulAddNeg(x3, edgeNormalsX3, Fma.MulAddNeg(y3, edgeNormalsY3, add256));
 
-            edgeOffsets1 = Fma.MultiplyAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX1, edgeOffsets1);
-            edgeOffsets2 = Fma.MultiplyAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX2, edgeOffsets2);
-            edgeOffsets3 = Fma.MultiplyAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX3, edgeOffsets3);
+            edgeOffsets1 = Fma.MulAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX1, edgeOffsets1);
+            edgeOffsets2 = Fma.MulAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX2, edgeOffsets2);
+            edgeOffsets3 = Fma.MulAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX3, edgeOffsets3);
 
-            edgeOffsets1 = Fma.MultiplyAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY1, edgeOffsets1);
-            edgeOffsets2 = Fma.MultiplyAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY2, edgeOffsets2);
-            edgeOffsets3 = Fma.MultiplyAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY3, edgeOffsets3);
+            edgeOffsets1 = Fma.MulAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY1, edgeOffsets1);
+            edgeOffsets2 = Fma.MulAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY2, edgeOffsets2);
+            edgeOffsets3 = Fma.MulAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY3, edgeOffsets3);
 
             // Quantize slopes
             Vector256<int> slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);
@@ -1080,8 +1080,8 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             Vector256<float> depthDy = Vector256.Create(depthDxy.GetElement(2));
 
             Vector256<float> lineDepth =
-              Fma.MultiplyAdd(depthDx, depthSamplePosFactor1,
-                Fma.MultiplyAdd(depthDy, depthSamplePosFactor2,
+              Fma.MulAdd(depthDx, depthSamplePosFactor1,
+                Fma.MulAdd(depthDy, depthSamplePosFactor2,
                   Avx2.BroadcastScalarToVector256(depthPlane[primitiveIdxTransposed])));
 
             Vector128<int> slopeLookup = Sse2.LoadAlignedVector128((int*)(slopeLookups + primitiveIdxTransposed));
@@ -1213,7 +1213,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
                     // Generate depth values around block
                     Vector256<float> depth0 = depth;
-                    Vector256<float> depth1 = Fma.MultiplyAdd(depthDx, Vector256.Create(0.5f), depth0);
+                    Vector256<float> depth1 = Fma.MulAdd(depthDx, Vector256.Create(0.5f), depth0);
                     Vector256<float> depth8 = depthDy + depth0;
                     Vector256<float> depth9 = depthDy + depth1;
 

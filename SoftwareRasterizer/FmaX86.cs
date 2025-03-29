@@ -5,13 +5,13 @@ using System.Runtime.Intrinsics.X86;
 
 namespace SoftwareRasterizer;
 
-public readonly struct FmaX86 : IMultiplyAdd, IFusedMultiplyAdd128, IFusedMultiplyAdd256
+public readonly struct FmaX86 : IMultiplyAdd, IMultiplyAdd128, IMultiplyAdd256
 {
     public static bool IsAcceleratedScalar => Fma.IsSupported;
 
-    public static bool IsHardwareAccelerated128 => Fma.IsSupported;
+    public static bool IsAccelerated128 => Fma.IsSupported;
 
-    public static bool IsHardwareAccelerated256 => Fma.IsSupported;
+    public static bool IsAccelerated256 => Fma.IsSupported;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float MulAdd(float a, float b, float c)
@@ -23,10 +23,10 @@ public readonly struct FmaX86 : IMultiplyAdd, IFusedMultiplyAdd128, IFusedMultip
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector128<float> MultiplyAdd(Vector128<float> a, Vector128<float> b, Vector128<float> c) => Fma.MultiplyAdd(a, b, c);
+    public static Vector128<float> MulAdd(Vector128<float> a, Vector128<float> b, Vector128<float> c) => Fma.MultiplyAdd(a, b, c);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector256<float> MultiplyAdd(Vector256<float> a, Vector256<float> b, Vector256<float> c) => Fma.MultiplyAdd(a, b, c);
+    public static Vector256<float> MulAdd(Vector256<float> a, Vector256<float> b, Vector256<float> c) => Fma.MultiplyAdd(a, b, c);
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float MulAddNeg(float a, float b, float c)
@@ -38,10 +38,10 @@ public readonly struct FmaX86 : IMultiplyAdd, IFusedMultiplyAdd128, IFusedMultip
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector128<float> MultiplyAddNegated(Vector128<float> a, Vector128<float> b, Vector128<float> c) => Fma.MultiplyAddNegated(a, b, c);
+    public static Vector128<float> MulAddNeg(Vector128<float> a, Vector128<float> b, Vector128<float> c) => Fma.MultiplyAddNegated(a, b, c);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector256<float> MultiplyAddNegated(Vector256<float> a, Vector256<float> b, Vector256<float> c) => Fma.MultiplyAddNegated(a, b, c);
+    public static Vector256<float> MulAddNeg(Vector256<float> a, Vector256<float> b, Vector256<float> c) => Fma.MultiplyAddNegated(a, b, c);
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float MulSub(float a, float b, float c)
@@ -53,8 +53,8 @@ public readonly struct FmaX86 : IMultiplyAdd, IFusedMultiplyAdd128, IFusedMultip
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector128<float> MultiplySubtract(Vector128<float> a, Vector128<float> b, Vector128<float> c) => Fma.MultiplySubtract(a, b, c);
+    public static Vector128<float> MulSub(Vector128<float> a, Vector128<float> b, Vector128<float> c) => Fma.MultiplySubtract(a, b, c);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector256<float> MultiplySubtract(Vector256<float> a, Vector256<float> b, Vector256<float> c) => Fma.MultiplySubtract(a, b, c);
+    public static Vector256<float> MulSub(Vector256<float> a, Vector256<float> b, Vector256<float> c) => Fma.MultiplySubtract(a, b, c);
 }

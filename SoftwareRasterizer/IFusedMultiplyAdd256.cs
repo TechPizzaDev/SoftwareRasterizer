@@ -2,13 +2,13 @@
 
 namespace SoftwareRasterizer;
 
-public interface IFusedMultiplyAdd256
+public interface IMultiplyAdd256
 {
-    static abstract bool IsHardwareAccelerated256 { get; }
+    static abstract bool IsAccelerated256 { get; }
 
-    static abstract Vector256<float> MultiplyAdd(Vector256<float> a, Vector256<float> b, Vector256<float> c);
+    static abstract Vector256<float> MulAdd(Vector256<float> a, Vector256<float> b, Vector256<float> c);
 
-    static abstract Vector256<float> MultiplyAddNegated(Vector256<float> a, Vector256<float> b, Vector256<float> c);
+    static abstract Vector256<float> MulAddNeg(Vector256<float> a, Vector256<float> b, Vector256<float> c);
 
-    static abstract Vector256<float> MultiplySubtract(Vector256<float> a, Vector256<float> b, Vector256<float> c);
+    static abstract Vector256<float> MulSub(Vector256<float> a, Vector256<float> b, Vector256<float> c);
 }
