@@ -10,8 +10,8 @@ namespace SoftwareRasterizer
     {
         private const uint NegZeroVal = 2147483648u; // -0.0f bits
 
-        public static void _MM_TRANSPOSE4_PS(
-            ref Vector4 row0, ref Vector4 row1, ref Vector4 row2, ref Vector4 row3)
+        public static (Vector4, Vector4, Vector4, Vector4) _MM_TRANSPOSE4_PS(
+            Vector4 row0, Vector4 row1, Vector4 row2, Vector4 row3)
         {
             float t0_0 = row0.X;
             row0.X = t0_0;
@@ -55,6 +55,8 @@ namespace SoftwareRasterizer
             row3.Y = t2_3;
 
             row2.W = t3_2;
+
+            return (row0, row1, row2, row3);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

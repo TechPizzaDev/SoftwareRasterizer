@@ -35,7 +35,7 @@ public unsafe class ScalarRasterizer : Rasterizer
         Vector4 mat2 = Unsafe.ReadUnaligned<Vector4>(matrix + 8);
         Vector4 mat3 = Unsafe.ReadUnaligned<Vector4>(matrix + 12);
 
-        _MM_TRANSPOSE4_PS(ref mat0, ref mat1, ref mat2, ref mat3);
+        (mat0, mat1, mat2, mat3) = _MM_TRANSPOSE4_PS(mat0, mat1, mat2, mat3);
 
         // Store rows
         Unsafe.Write(m_modelViewProjectionRaw + 0, mat0);
@@ -50,7 +50,7 @@ public unsafe class ScalarRasterizer : Rasterizer
         // Map depth from [-1, 1] to [bias, 0]
         mat2 = ((mat3 - mat2) * new Vector4(0.5f * floatCompressionBias));
 
-        _MM_TRANSPOSE4_PS(ref mat0, ref mat1, ref mat2, ref mat3);
+        (mat0, mat1, mat2, mat3) = _MM_TRANSPOSE4_PS(mat0, mat1, mat2, mat3);
 
         // Store prebaked cols
         Unsafe.Write(m_modelViewProjection + 0, mat0);
@@ -149,36 +149,27 @@ public unsafe class ScalarRasterizer : Rasterizer
         Vector4 egde1 = (col1 * Permute(extents, 0b01_01_01_01));
         Vector4 egde2 = (col2 * Permute(extents, 0b10_10_10_10));
 
-        Vector4 corners0;
-        Vector4 corners1;
-        Vector4 corners2;
-        Vector4 corners3;
-        Vector4 corners4;
-        Vector4 corners5;
-        Vector4 corners6;
-        Vector4 corners7;
-
         // Transform first corner
-        corners0 =
+        Vector4 corners0 =
           ((col0 * new Vector4(boundsMin.X)) +
             ((col1 * Permute(boundsMin, 0b01_01_01_01)) +
               ((col2 * Permute(boundsMin, 0b10_10_10_10)) +
                 col3)));
 
         // Transform remaining corners by adding edge vectors
-        corners1 = (corners0 + egde0);
-        corners2 = (corners0 + egde1);
-        corners4 = (corners0 + egde2);
+        Vector4 corners1 = (corners0 + egde0);
+        Vector4 corners2 = (corners0 + egde1);
+        Vector4 corners4 = (corners0 + egde2);
 
-        corners3 = (corners1 + egde1);
-        corners5 = (corners4 + egde0);
-        corners6 = (corners2 + egde2);
+        Vector4 corners3 = (corners1 + egde1);
+        Vector4 corners5 = (corners4 + egde0);
+        Vector4 corners6 = (corners2 + egde2);
 
-        corners7 = (corners6 + egde0);
+        Vector4 corners7 = (corners6 + egde0);
 
         // Transpose into SoA
-        _MM_TRANSPOSE4_PS(ref corners0, ref corners1, ref corners2, ref corners3);
-        _MM_TRANSPOSE4_PS(ref corners4, ref corners5, ref corners6, ref corners7);
+        (corners0, corners1, corners2, corners3) = _MM_TRANSPOSE4_PS(corners0, corners1, corners2, corners3);
+        (corners4, corners5, corners6, corners7) = _MM_TRANSPOSE4_PS(corners4, corners5, corners6, corners7);
 
         // Even if all bounding box corners have W > 0 here, we may end up with some vertices with W < 0 to due floating point differences; so test with some epsilon if any W < 0.
         Vector4 maxExtent = Vector4.Max(extents, Permute(extents, 0b01_00_11_10));
@@ -550,7 +541,7 @@ public unsafe class ScalarRasterizer : Rasterizer
         mat1 -= mat0;
         mat2 -= mat0;
 
-        _MM_TRANSPOSE4_PS(ref mat0, ref mat1, ref mat2, ref mat3);
+        (mat0, mat1, mat2, mat3) = _MM_TRANSPOSE4_PS(mat0, mat1, mat2, mat3);
 
         // Due to linear relationship between Z and W, it's cheaper to compute Z from W later in the pipeline than using the full projection matrix up front
         float c0, c1;
