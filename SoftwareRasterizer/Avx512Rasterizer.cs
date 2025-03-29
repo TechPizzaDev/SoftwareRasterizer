@@ -8,27 +8,27 @@ namespace SoftwareRasterizer;
 
 using static VectorMath;
 
-public unsafe class Avx2Rasterizer<Fma> : Rasterizer
+public unsafe class Avx512Rasterizer<Fma> : Rasterizer
     where Fma : IMultiplyAdd, IMultiplyAdd128, IMultiplyAdd256
 {
     private const FloatComparisonMode _CMP_LT_OQ = FloatComparisonMode.OrderedLessThanNonSignaling;
     private const FloatComparisonMode _CMP_LE_OQ = FloatComparisonMode.OrderedLessThanOrEqualNonSignaling;
     private const FloatComparisonMode _CMP_GT_OQ = FloatComparisonMode.OrderedGreaterThanNonSignaling;
 
-    private const int Alignment = 256 / 8; // sizeof(Vector256<>)
+    private const int Alignment = 512 / 8; // sizeof(Vector512<>)
 
-    public Avx2Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
+    public Avx512Rasterizer(RasterizationTable rasterizationTable, uint width, uint height) :
         base(rasterizationTable, width, height, Alignment)
     {
     }
 
-    public static Avx2Rasterizer<Fma> Create(RasterizationTable rasterizationTable, uint width, uint height)
+    public static Avx512Rasterizer<Fma> Create(RasterizationTable rasterizationTable, uint width, uint height)
     {
         bool success = false;
         rasterizationTable.DangerousAddRef(ref success);
         if (success)
         {
-            return new Avx2Rasterizer<Fma>(rasterizationTable, width, height);
+            return new Avx512Rasterizer<Fma>(rasterizationTable, width, height);
         }
         throw new ObjectDisposedException(rasterizationTable.GetType().Name);
     }
