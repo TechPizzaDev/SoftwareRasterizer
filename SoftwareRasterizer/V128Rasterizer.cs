@@ -125,6 +125,15 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
             return false;
         }
 
+        return queryVisibilityCorners(vBoundsMin, vBoundsMax, out needsClipping);
+    }
+
+    private bool queryVisibilityCorners(Vector4 vBoundsMin, Vector4 vBoundsMax, out bool needsClipping)
+    { 
+        Vector128<float> boundsMin = vBoundsMin.AsVector128();
+        Vector128<float> boundsMax = vBoundsMax.AsVector128();
+        Vector128<float> extents = (boundsMax - boundsMin);
+
         // Load prebaked projection matrix
         Vector128<float> col0 = V128.LoadAligned(m_modelViewProjection + 0);
         Vector128<float> col1 = V128.LoadAligned(m_modelViewProjection + 4);
@@ -199,7 +208,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         maxsXY = V128.Min(maxsXY, V128.Create(m_width - 1f, m_height - 1f, m_width - 1f, m_height - 1f));
 
         // Negate maxes so we can round in the same direction
-        maxsXY ^= minusZero;
+        maxsXY ^= Vector128.Create(-0.0f);
 
         // Horizontal reduction, step 2
         Vector128<float> boundsF = V128.Min(V128Helper.UnpackLow(minsXY, maxsXY), V128Helper.UnpackHigh(minsXY, maxsXY));
