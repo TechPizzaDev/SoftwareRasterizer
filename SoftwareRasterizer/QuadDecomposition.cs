@@ -12,7 +12,7 @@ using static VectorMath;
 
 using Vertex = Int32;
 
-public static unsafe class QuadDecomposition
+public static class QuadDecomposition
 {
     private readonly struct Graph
     {
@@ -54,7 +54,7 @@ public static unsafe class QuadDecomposition
                 if (m_matchedVertex[v] == -1)
                 {
                     bool found = false;
-                    foreach (int w in m_graph.m_adjacencyList[v])
+                    foreach (int w in CollectionsMarshal.AsSpan(m_graph.m_adjacencyList[v]))
                     {
                         if (m_matchedVertex[w] == -1)
                         {
@@ -72,7 +72,7 @@ public static unsafe class QuadDecomposition
             }
 
             List<Vertex> path = new();
-            foreach (int v in unmatchedVertices)
+            foreach (int v in CollectionsMarshal.AsSpan(unmatchedVertices))
             {
                 if (m_matchedVertex[v] == -1)
                 {
@@ -84,13 +84,17 @@ public static unsafe class QuadDecomposition
                 }
             }
         }
+        public int numVertices()
+        {
+            return m_matchedVertex.Length;
+        }
 
-        public Vertex getMatchedVertex(Vertex v)
+        public readonly Vertex getMatchedVertex(Vertex v)
         {
             return m_matchedVertex[v];
         }
 
-        private void match(Vertex v, Vertex w)
+        private readonly void match(Vertex v, Vertex w)
         {
             m_matchedVertex[v] = w;
             m_matchedVertex[w] = v;
@@ -119,7 +123,7 @@ public static unsafe class QuadDecomposition
 
             while (m_queue.TryDequeue(out Vertex v))
             {
-                foreach (int w in m_graph.m_adjacencyList[v])
+                foreach (int w in CollectionsMarshal.AsSpan(m_graph.m_adjacencyList[v]))
                 {
                     if (examineEdge(root, v, w, path))
                     {
@@ -160,13 +164,13 @@ public static unsafe class QuadDecomposition
             return false;
         }
 
-        private void buildAugmentingPath(Vertex root, Vertex v, Vertex w, List<Vertex> path)
+        private readonly void buildAugmentingPath(Vertex root, Vertex v, Vertex w, List<Vertex> path)
         {
             path.Add(w);
             findPath(v, root, path);
         }
 
-        private void extendTree(Vertex v, Vertex w)
+        private readonly void extendTree(Vertex v, Vertex w)
         {
             Vertex u = m_matchedVertex[w];
 
@@ -195,7 +199,7 @@ public static unsafe class QuadDecomposition
             shrinkPath(b, w, v);
         }
 
-        private void shrinkPath(Vertex b, Vertex v, Vertex w)
+        private readonly void shrinkPath(Vertex b, Vertex v, Vertex w)
         {
             Vertex u = find(v);
 
@@ -212,7 +216,7 @@ public static unsafe class QuadDecomposition
             }
         }
 
-        private Vertex findCommonAncestor(Vertex v, Vertex w)
+        private readonly Vertex findCommonAncestor(Vertex v, Vertex w)
         {
             while (w != v)
             {
@@ -229,7 +233,7 @@ public static unsafe class QuadDecomposition
             return find(v);
         }
 
-        private void findPath(Vertex s, Vertex t, List<Vertex> path)
+        private readonly void findPath(Vertex s, Vertex t, List<Vertex> path)
         {
             if (s == t)
             {
@@ -256,20 +260,20 @@ public static unsafe class QuadDecomposition
             }
         }
 
-        private void makeUnion(int x, int y)
+        private readonly void makeUnion(int x, int y)
         {
             int xRoot = find(x);
             m_tree[xRoot].m_blossom = find(y);
         }
 
-        private void makeRepresentative(int x)
+        private readonly void makeRepresentative(int x)
         {
             int xRoot = find(x);
             m_tree[xRoot].m_blossom = x;
             m_tree[x].m_blossom = x;
         }
 
-        private int find(int x)
+        private readonly int find(int x)
         {
             if (m_tree[x].m_clearToken != m_clearToken)
             {
@@ -287,18 +291,18 @@ public static unsafe class QuadDecomposition
 
         private int m_clearToken;
 
-        private Graph m_graph;
+        private readonly Graph m_graph;
 
-        private Queue<Vertex> m_queue;
-        private Vertex[] m_matchedVertex;
+        private readonly Queue<Vertex> m_queue;
+        private readonly Vertex[] m_matchedVertex;
 
-        private Node[] m_tree;
+        private readonly Node[] m_tree;
 
-        private VertexPair[] m_bridges;
+        private readonly VertexPair[] m_bridges;
 
         private struct Node
         {
-            public int m_depth;
+            public uint m_depth;
             public Vertex m_parent;
             public Vertex m_blossom;
 
@@ -326,8 +330,8 @@ public static unsafe class QuadDecomposition
 
         public override int GetHashCode()
         {
-            uint hashT = (uint)first.GetHashCode();
-            uint hashU = (uint)second.GetHashCode();
+            uint hashT = first;
+            uint hashU = second;
             return (int)(hashT ^ (hashU + 0x9e3779b9 + (hashT << 6) + (hashT >> 2)));
         }
 
@@ -345,13 +349,13 @@ public static unsafe class QuadDecomposition
         Vector128<float> n0 = normalize(normal(v0, v1, v2));
         Vector128<float> n2 = normalize(normal(v2, v3, v0));
 
-        Vector128<float> planeDistA = Vector128.AndNot(V128Helper.DotProduct_x7F(n0, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
-        Vector128<float> planeDistB = Vector128.AndNot(V128Helper.DotProduct_x7F(n2, Vector128.Subtract(v1, v3)), Vector128.Create(-0.0f));
+        Vector128<float> planeDistA = Vector128.AndNot(V128Helper.DotProduct_x7F(n0, (v1 - v3)), Vector128.Create(-0.0f));
+        Vector128<float> planeDistB = Vector128.AndNot(V128Helper.DotProduct_x7F(n2, (v1 - v3)), Vector128.Create(-0.0f));
 
         if (Sse.IsSupported)
         {
-            if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.Create(MaximumDepthError)) ||
-                Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.Create(MaximumDepthError)))
+            if (Sse.CompareScalarOrderedGreaterThan(planeDistA, Vector128.CreateScalarUnsafe(MaximumDepthError)) ||
+                Sse.CompareScalarOrderedGreaterThan(planeDistB, Vector128.CreateScalarUnsafe(MaximumDepthError)))
             {
                 return false;
             }
@@ -410,13 +414,13 @@ public static unsafe class QuadDecomposition
 
         Dictionary<VertexPair, List<VertexPair>> edgeToTriangle = new();
 
-        uint* i = stackalloc uint[3];
+        Span<uint> i = stackalloc uint[3];
 
         for (uint triangleIdx = 0; triangleIdx < triangleCount; ++triangleIdx)
         {
-            i[0] = indices[(int)(3 * triangleIdx + 0)];
-            i[1] = indices[(int)(3 * triangleIdx + 1)];
-            i[2] = indices[(int)(3 * triangleIdx + 2)];
+            i[0] = indices[(int) (3 * triangleIdx + 0)];
+            i[1] = indices[(int) (3 * triangleIdx + 1)];
+            i[2] = indices[(int) (3 * triangleIdx + 2)];
 
             GetOrAdd(edgeToTriangle, new VertexPair(i[0], i[1])).Add(new VertexPair(triangleIdx, i[2]));
             GetOrAdd(edgeToTriangle, new VertexPair(i[1], i[2])).Add(new VertexPair(triangleIdx, i[0]));
@@ -436,27 +440,36 @@ public static unsafe class QuadDecomposition
                     uint neighborTriangle = pair.first;
                     uint apex = pair.second;
 
-                    int quad0 = (int)i[edgeIdx];
-                    int quad1 = (int)apex;
-                    int quad2 = (int)i[(edgeIdx + 1) % 3];
-                    int quad3 = (int)i[(edgeIdx + 2) % 3];
+                    int quad0 = (int) i[edgeIdx];
+                    int quad1 = (int) apex;
+                    int quad2 = (int) i[(edgeIdx + 1) % 3];
+                    int quad3 = (int) i[(edgeIdx + 2) % 3];
 
                     if (CanMergeTrianglesToQuad(vertices[quad0], vertices[quad1], vertices[quad2], vertices[quad3]))
                     {
-                        neighborList.Add((int)neighborTriangle);
-                        candidateGraph.m_adjacencyList[neighborTriangle].Add((int)triangleIdx);
+                        neighborList.Add((int) neighborTriangle);
+                        candidateGraph.m_adjacencyList[neighborTriangle].Add((int) triangleIdx);
                     }
                 }
             }
         }
 
+        return decomposeMatches(indices, candidateGraph, edgeToTriangle);
+    }
+
+    private static List<uint> decomposeMatches(
+        ReadOnlySpan<uint> indices,
+        Graph candidateGraph, 
+        Dictionary<VertexPair, List<VertexPair>> edgeToTriangle)
+    {
+        Span<uint> i = stackalloc uint[3];
 
         uint quadCount = 0;
 
         Matching matching = new(candidateGraph);
         List<uint> result = new();
 
-        for (uint triangleIdx = 0; triangleIdx < triangleCount; ++triangleIdx)
+        for (uint triangleIdx = 0; triangleIdx < matching.numVertices(); ++triangleIdx)
         {
             int neighbor = matching.getMatchedVertex((int)triangleIdx);
 
@@ -479,7 +492,7 @@ public static unsafe class QuadDecomposition
                 i[2] = indices[(int)(3 * triangleIdx + 2)];
 
                 // Find out which edge was matched
-                for (uint edgeIdx = 0; edgeIdx < 3; ++edgeIdx)
+                for (int edgeIdx = 0; edgeIdx < 3; ++edgeIdx)
                 {
                     VertexPair f = new(i[(edgeIdx + 1) % 3], i[edgeIdx]);
                     if (!edgeToTriangle.TryGetValue(f, out List<VertexPair>? neighbors))
