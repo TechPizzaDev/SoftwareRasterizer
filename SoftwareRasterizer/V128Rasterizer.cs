@@ -96,33 +96,30 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         // Compute distance from each frustum plane
         Vector128<float> plane0 = (row3 + row0);
         Vector128<float> offset0 = (center + (extents ^ (plane0 & minusZero)));
-        Vector128<float> dist0 = V128.Create(V128.Dot(plane0, offset0));
+        int combined = BitConverter.SingleToInt32Bits(V128.Dot(plane0, offset0));
 
         Vector128<float> plane1 = (row3 - row0);
         Vector128<float> offset1 = (center + (extents ^ (plane1 & minusZero)));
-        Vector128<float> dist1 = V128.Create(V128.Dot(plane1, offset1));
+        combined |= BitConverter.SingleToInt32Bits(V128.Dot(plane1, offset1));
 
         Vector128<float> plane2 = (row3 + row1);
         Vector128<float> offset2 = (center + (extents ^ (plane2 & minusZero)));
-        Vector128<float> dist2 = V128.Create(V128.Dot(plane2, offset2));
+        combined |= BitConverter.SingleToInt32Bits(V128.Dot(plane2, offset2));
 
         Vector128<float> plane3 = (row3 - row1);
         Vector128<float> offset3 = (center + (extents ^ (plane3 & minusZero)));
-        Vector128<float> dist3 = V128.Create(V128.Dot(plane3, offset3));
+        combined |= BitConverter.SingleToInt32Bits(V128.Dot(plane3, offset3));
 
         Vector128<float> plane4 = (row3 + row2);
         Vector128<float> offset4 = (center + (extents ^ (plane4 & minusZero)));
-        Vector128<float> dist4 = V128.Create(V128.Dot(plane4, offset4));
+        combined |= BitConverter.SingleToInt32Bits(V128.Dot(plane4, offset4));
 
         Vector128<float> plane5 = (row3 - row2);
         Vector128<float> offset5 = (center + (extents ^ (plane5 & minusZero)));
-        Vector128<float> dist5 = V128.Create(V128.Dot(plane5, offset5));
-
-        // Combine plane distance signs
-        Vector128<float> combined = ((dist0 | dist1) | (dist2 | dist3)) | (dist4 | dist5);
+        combined |= BitConverter.SingleToInt32Bits(V128.Dot(plane5, offset5));
 
         // Can't use Sse41.TestZ or _mm_comile_ss here because the OR's above created garbage in the non-sign bits
-        if (V128.ExtractMostSignificantBits(combined) != 0)
+        if (combined < 0)
         {
             needsClipping = false;
             return false;
