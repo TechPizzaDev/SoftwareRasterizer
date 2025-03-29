@@ -334,10 +334,11 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
             {
                 if (m_hiZ[blockY * m_blocksX + blockX] == 1)
                 {
+                    Vector256<uint> zero = Vector256<uint>.Zero;
                     for (uint y = 0; y < 8; ++y)
                     {
-                        byte* dest = target + 4 * (8 * blockX + m_width * (8 * blockY + y));
-                        Unsafe.InitBlockUnaligned(dest, 0, 32);
+                        uint* dest = (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y)));
+                        zero.StoreAligned(dest);
                     }
                     continue;
                 }
@@ -366,10 +367,10 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
                 for (uint y = 0; y < 8; y += 4)
                 {
-                    Vector256<float> depth0 = Avx.LoadAlignedVector256((float*)(linDepthA + y + 0));
-                    Vector256<float> depth1 = Avx.LoadAlignedVector256((float*)(linDepthA + y + 1));
-                    Vector256<float> depth2 = Avx.LoadAlignedVector256((float*)(linDepthA + y + 2));
-                    Vector256<float> depth3 = Avx.LoadAlignedVector256((float*)(linDepthA + y + 3));
+                    Vector256<float> depth0 = Vector256.LoadAligned((float*)(linDepthA + y + 0));
+                    Vector256<float> depth1 = Vector256.LoadAligned((float*)(linDepthA + y + 1));
+                    Vector256<float> depth2 = Vector256.LoadAligned((float*)(linDepthA + y + 2));
+                    Vector256<float> depth3 = Vector256.LoadAligned((float*)(linDepthA + y + 3));
 
                     Vector256<int> vR32_0 = Avx.ConvertToVector256Int32WithTruncation(depth0 * vRcp100);
                     Vector256<int> vR32_1 = Avx.ConvertToVector256Int32WithTruncation(depth1 * vRcp100);
@@ -397,10 +398,10 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
                     Vector256<uint> result3 = Avx2.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
                     Vector256<uint> result4 = Avx2.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
 
-                    Avx.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))), result1);
-                    Avx.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))), result2);
-                    Avx.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 2))), result3);
-                    Avx.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 3))), result4);
+                    result1.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))));
+                    result2.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))));
+                    result3.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 2))));
+                    result4.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 3))));
                 }
             }
         }

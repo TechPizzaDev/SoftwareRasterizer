@@ -333,10 +333,12 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
             {
                 if (m_hiZ[blockY * m_blocksX + blockX] == 1)
                 {
+                    Vector128<uint> zero = Vector128<uint>.Zero;
                     for (uint y = 0; y < 8; ++y)
                     {
-                        byte* dest = target + 4 * (8 * blockX + m_width * (8 * blockY + y));
-                        Unsafe.InitBlockUnaligned(dest, 0, 32);
+                        uint* dest0 = (uint*) (target + 4 * (8 * blockX + m_width * (8 * blockY + y)));
+                        zero.StoreAligned(dest0);
+                        zero.StoreAligned(dest0 + 4);
                     }
                     continue;
                 }
@@ -402,10 +404,10 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<uint> result3 = V128Helper.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
                     Vector128<uint> result4 = V128Helper.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
 
-                    V128.StoreAligned(result1, (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 0);
-                    V128.StoreAligned(result2, (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 4);
-                    V128.StoreAligned(result3, (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 0);
-                    V128.StoreAligned(result4, (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 4);
+                    result1.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 0);
+                    result2.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 4);
+                    result3.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 0);
+                    result4.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 4);
                 }
             }
         }
