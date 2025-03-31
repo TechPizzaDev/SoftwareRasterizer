@@ -114,6 +114,27 @@ public static class V128Helper
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<int> ConvertToInt32(Vector128<float> value)
+    {
+#if NET9_0_OR_GREATER
+        return Vector128.ConvertToInt32Native(value);
+#else
+        if (Sse2.IsSupported)
+        {
+            return Sse2.ConvertToVector128Int32WithTruncation(value);
+        }
+        else if (AdvSimd.IsSupported)
+        {
+            return AdvSimd.ConvertToInt32RoundToZero(value);
+        }
+        else
+        {
+            return Vector128.ConvertToInt32(value);
+        }
+#endif
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector128<float> DotProduct_x7F(Vector128<float> a, Vector128<float> b)
     {
         if (Sse41.IsSupported)
@@ -126,6 +147,42 @@ public static class V128Helper
             Vector3 b3 = b.AsVector3();
             return Vector128.Create(Vector3.Dot(a3, b3));
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> Max(Vector128<float> a, Vector128<float> b)
+    {
+#if NET9_0_OR_GREATER
+        return Vector128.MaxNative(a, b);
+#else
+        if (Sse.IsSupported)
+        {
+            return Sse.Max(a, b);
+        }
+        else if (AdvSimd.IsSupported)
+        {
+            return AdvSimd.Max(a, b);
+        }
+        return Vector128.Max(a, b);
+#endif
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector128<float> Min(Vector128<float> a, Vector128<float> b)
+    {
+#if NET9_0_OR_GREATER
+        return Vector128.MinNative(a, b);
+#else
+        if (Sse.IsSupported)
+        {
+            return Sse.Min(a, b);
+        }
+        else if (AdvSimd.IsSupported)
+        {
+            return AdvSimd.Min(a, b);
+        }
+        return Vector128.Min(a, b);
+#endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -172,7 +229,7 @@ public static class V128Helper
         }
         else
         {
-            Vector128<short> max = Vector128.Create((short)byte.MaxValue);
+            Vector128<short> max = Vector128.Create((short) byte.MaxValue);
             Vector128<short> satLeft = Vector128.Max(Vector128<short>.Zero, Vector128.Min(left, max));
             Vector128<short> satRight = Vector128.Max(Vector128<short>.Zero, Vector128.Min(right, max));
             return Vector128.Narrow(satLeft.AsUInt16(), satRight.AsUInt16());
@@ -194,7 +251,7 @@ public static class V128Helper
         }
         else
         {
-            Vector128<int> max = Vector128.Create((int)ushort.MaxValue);
+            Vector128<int> max = Vector128.Create((int) ushort.MaxValue);
             Vector128<int> satLeft = Vector128.Max(Vector128<int>.Zero, Vector128.Min(left, max));
             Vector128<int> satRight = Vector128.Max(Vector128<int>.Zero, Vector128.Min(right, max));
             return Vector128.Narrow(satLeft.AsUInt32(), satRight.AsUInt32());
@@ -214,7 +271,7 @@ public static class V128Helper
         }
         else
         {
-            Vector128<int> max = Vector128.Create((int)ushort.MaxValue);
+            Vector128<int> max = Vector128.Create((int) ushort.MaxValue);
             Vector128<uint> satLeft = Vector128.Max(Vector128<int>.Zero, Vector128.Min(left, max)).AsUInt32();
             return Vector64.Narrow(satLeft.GetLower(), satLeft.GetUpper());
         }
