@@ -312,6 +312,7 @@ public unsafe class ScalarRasterizer : Rasterizer
         return false;
     }
 
+    [SkipLocalsInit]
     public override void readBackDepth(byte* target)
     {
         const float bias = 1.0f / floatCompressionBias;
@@ -324,17 +325,20 @@ public unsafe class ScalarRasterizer : Rasterizer
         byte* alignedBuffer = (byte*)((nint)(stackBuffer + (Alignment - 1)) & -Alignment);
 
         Vector128<float>* linDepthA = (Vector128<float>*)alignedBuffer;
+        uint width = m_width;
 
         for (uint blockY = 0; blockY < m_blocksY; ++blockY)
         {
             for (uint blockX = 0; blockX < m_blocksX; ++blockX)
             {
+                uint* dst = (uint*) target + (8 * blockX + width * (8 * blockY));
+
                 if (m_hiZ[blockY * m_blocksX + blockX] == 1)
                 {
                     for (uint y = 0; y < 8; ++y)
                     {
-                        byte* dest = target + 4 * (8 * blockX + m_width * (8 * blockY + y));
-                        Unsafe.InitBlockUnaligned(dest, 0, 32);
+                        Unsafe.InitBlockUnaligned(dst, 0, 32);
+                        dst += m_width;
                     }
                     continue;
                 }
@@ -348,7 +352,7 @@ public unsafe class ScalarRasterizer : Rasterizer
                 Vector4I* source = (Vector4I*)&m_depthBuffer[8 * (blockY * m_blocksX + blockX)];
                 for (uint y = 0; y < 8; ++y)
                 {
-                    Vector4I depthI = Unsafe.Read<Vector4I>((int*)source++);
+                    Vector4I depthI = Unsafe.Read<Vector4I>((int*)(source + y));
 
                     Vector4I depthILo = ((Vector4I)Sse41.ConvertToVector128Int32(depthI.AsUInt16()) << 12);
                     Vector4I depthIHi = ((Vector4I)Sse41.ConvertToVector128Int32(Sse2.Shuffle(depthI, 0b11_10).AsUInt16()) << 12);
@@ -395,16 +399,17 @@ public unsafe class ScalarRasterizer : Rasterizer
                     Vector128<ushort> vRG_Lo = Sse2.UnpackLow(vR8, vG8).AsUInt16();
                     Vector128<ushort> vRG_Hi = Sse2.UnpackHigh(vR8, vG8).AsUInt16();
 
-                    Vector128<int> result1 = Sse2.UnpackLow(vRG_Lo, vZeroMax).AsInt32();
-                    Vector128<int> result2 = Sse2.UnpackHigh(vRG_Lo, vZeroMax).AsInt32();
-                    Vector128<int> result3 = Sse2.UnpackLow(vRG_Hi, vZeroMax).AsInt32();
-                    Vector128<int> result4 = Sse2.UnpackHigh(vRG_Hi, vZeroMax).AsInt32();
+                    Vector128<uint> result1 = Sse2.UnpackLow(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector128<uint> result2 = Sse2.UnpackHigh(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector128<uint> result3 = Sse2.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
+                    Vector128<uint> result4 = Sse2.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
 
-                    Unsafe.Write((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 0, result1);
-                    Unsafe.Write((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 4, result2);
-                    Unsafe.Write((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 0, result3);
-                    Unsafe.Write((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 4, result4);
-                }
+                    result1.StoreAligned(dst);
+                    result2.StoreAligned(dst + 4);
+                    result3.StoreAligned(dst += width);
+                    result4.StoreAligned(dst + 4);
+                    dst += width;
+                } 
             }
         }
     }

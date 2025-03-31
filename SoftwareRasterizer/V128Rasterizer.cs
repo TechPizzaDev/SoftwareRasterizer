@@ -314,6 +314,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         return false;
     }
 
+    [SkipLocalsInit]
     public override void readBackDepth(byte* target)
     {
         const float bias = 1.0f / floatCompressionBias;
@@ -326,19 +327,22 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         byte* alignedBuffer = (byte*)((nint)(stackBuffer + (Alignment - 1)) & -Alignment);
 
         Vector128<float>* linDepthA = (Vector128<float>*)alignedBuffer;
+        uint width = m_width;
 
         for (uint blockY = 0; blockY < m_blocksY; ++blockY)
         {
             for (uint blockX = 0; blockX < m_blocksX; ++blockX)
             {
+                uint* dst = (uint*) target + (8 * blockX + width * (8 * blockY));
+
                 if (m_hiZ[blockY * m_blocksX + blockX] == 1)
                 {
                     Vector128<uint> zero = Vector128<uint>.Zero;
                     for (uint y = 0; y < 8; ++y)
                     {
-                        uint* dest0 = (uint*) (target + 4 * (8 * blockX + m_width * (8 * blockY + y)));
-                        zero.StoreAligned(dest0);
-                        zero.StoreAligned(dest0 + 4);
+                        zero.StoreAligned(dst);
+                        zero.StoreAligned(dst + 4);
+                        dst += width;
                     }
                     continue;
                 }
@@ -352,7 +356,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                 Vector128<int>* source = &m_depthBuffer[8 * (blockY * m_blocksX + blockX)];
                 for (uint y = 0; y < 8; ++y)
                 {
-                    Vector128<int> depthI = V128.LoadAligned((int*)source++);
+                    Vector128<int> depthI = V128.LoadAligned((int*)(source + y));
 
                     Vector128<int> depthILo = (V128Helper.ConvertToInt32(depthI.AsUInt16()) << 12);
                     Vector128<int> depthIHi = (V128Helper.ConvertToInt32(V128.Shuffle(depthI, V128.Create(2, 3, 0, 0)).AsUInt16()) << 12);
@@ -383,8 +387,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<int> vR32_2 = V128.ConvertToInt32((depth2 * vRcp100));
                     Vector128<int> vR32_3 = V128.ConvertToInt32((depth3 * vRcp100));
 
-                    Vector128<ushort> vR16_0 = (V128Helper.PackUnsignedSaturate(vR32_0, vR32_1) & vMask);
-                    Vector128<ushort> vR16_1 = (V128Helper.PackUnsignedSaturate(vR32_2, vR32_3) & vMask);
+                    Vector128<ushort> vR16_0 = V128Helper.PackUnsignedSaturate(vR32_0, vR32_1) & vMask;
+                    Vector128<ushort> vR16_1 = V128Helper.PackUnsignedSaturate(vR32_2, vR32_3) & vMask;
                     Vector128<byte> vR8 = V128Helper.PackUnsignedSaturate(vR16_0.AsInt16(), vR16_1.AsInt16());
 
                     Vector128<int> vG32_0 = V128.ConvertToInt32(depth0);
@@ -392,8 +396,8 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<int> vG32_2 = V128.ConvertToInt32(depth2);
                     Vector128<int> vG32_3 = V128.ConvertToInt32(depth3);
 
-                    Vector128<ushort> vG16_0 = (V128Helper.PackUnsignedSaturate(vG32_0, vG32_1) & vMask);
-                    Vector128<ushort> vG16_1 = (V128Helper.PackUnsignedSaturate(vG32_2, vG32_3) & vMask);
+                    Vector128<ushort> vG16_0 = V128Helper.PackUnsignedSaturate(vG32_0, vG32_1) & vMask;
+                    Vector128<ushort> vG16_1 = V128Helper.PackUnsignedSaturate(vG32_2, vG32_3) & vMask;
                     Vector128<byte> vG8 = V128Helper.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
 
                     Vector128<ushort> vRG_Lo = V128Helper.UnpackLow(vR8, vG8).AsUInt16();
@@ -404,10 +408,11 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     Vector128<uint> result3 = V128Helper.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
                     Vector128<uint> result4 = V128Helper.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
 
-                    result1.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 0);
-                    result2.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))) + 4);
-                    result3.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 0);
-                    result4.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))) + 4);
+                    result1.StoreAligned(dst);
+                    result2.StoreAligned(dst + 4);
+                    result3.StoreAligned(dst += width);
+                    result4.StoreAligned(dst + 4);
+                    dst += width;
                 }
             }
         }
