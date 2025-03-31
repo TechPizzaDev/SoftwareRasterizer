@@ -204,7 +204,11 @@ public unsafe class Main
     public void CycleRasterizerImpl()
     {
         var previousRasterizer = g_rasterizer;
-        if (previousRasterizer is Avx2Rasterizer<FmaIntrinsic> or Avx2Rasterizer<FmaX86>)
+        if (previousRasterizer is Avx512Rasterizer<FmaIntrinsic> or Avx512Rasterizer<FmaX86>)
+        {
+            g_rasterizer = Avx2Rasterizer<FmaX86>.Create(g_rasterizationTable, WindowWidth, WindowHeight);
+        }
+        else if (previousRasterizer is Avx2Rasterizer<FmaIntrinsic> or Avx2Rasterizer<FmaX86>)
         {
             g_rasterizer = V128Rasterizer<FmaX86>.Create(g_rasterizationTable, WindowWidth, WindowHeight);
         }
@@ -214,7 +218,7 @@ public unsafe class Main
         }
         else
         {
-            g_rasterizer = Avx2Rasterizer<FmaX86>.Create(g_rasterizationTable, WindowWidth, WindowHeight);
+            g_rasterizer = Avx512Rasterizer<FmaX86>.Create(g_rasterizationTable, WindowWidth, WindowHeight);
         }
 
         previousRasterizer.Dispose();
