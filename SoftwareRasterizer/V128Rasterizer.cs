@@ -238,7 +238,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
 
         Vector128<ushort> depth = packDepthPremultiplied(corners2, corners6);
 
-        ushort maxZ = (ushort)(0xFFFFu ^ V128Helper.MinHorizontal((depth ^ V128.Create((short)-1).AsUInt16())));
+        ushort maxZ = (ushort)(0xFFFFu ^ V128Helper.MinHorizontal((depth ^ Vector128<ushort>.AllBitsSet)));
 
         if (!query2D(minX, maxX, minY, maxY, maxZ))
         {
@@ -1382,9 +1382,7 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
                     // Update HiZ
                     Vector128<ushort> newMinZ_A = V128.Min(V128.Min(d0_A, d1_A), V128.Min(d2_A, d3_A));
                     Vector128<ushort> newMinZ_B = V128.Min(V128.Min(d0_B, d1_B), V128.Min(d2_B, d3_B));
-                    ushort newMinZ16 = V128Helper.MinHorizontal(V128.Min(newMinZ_A, newMinZ_B));
-
-                    *pBlockRowHiZ = newMinZ16;
+                    *pBlockRowHiZ = V128Helper.MinHorizontal(V128.Min(newMinZ_A, newMinZ_B));
                 }
             }
         }

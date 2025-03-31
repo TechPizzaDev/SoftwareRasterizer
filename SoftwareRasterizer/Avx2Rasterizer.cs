@@ -1264,9 +1264,7 @@ public unsafe class Avx2Rasterizer<Fma> : Rasterizer
 
                     // Update HiZ
                     Vector256<ushort> newMinZ = Avx2.Min(Avx2.Min(d0, d1), Avx2.Min(d2, d3));
-                    Vector128<int> newMinZ16 = Sse41.MinHorizontal(Sse41.Min(newMinZ.GetLower(), newMinZ.GetUpper())).AsInt32();
-
-                    *pBlockRowHiZ = (ushort) (uint) Sse2.ConvertToInt32(newMinZ16);
+                    *pBlockRowHiZ = V128Helper.MinHorizontal(Sse41.Min(newMinZ.GetLower(), newMinZ.GetUpper()));
                 }
             }
         }
