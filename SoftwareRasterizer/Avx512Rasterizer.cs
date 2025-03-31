@@ -315,93 +315,102 @@ public unsafe class Avx512Rasterizer<Fma> : Rasterizer
         return false;
     }
 
+    [SkipLocalsInit]
     public override void readBackDepth(byte* target)
     {
         const float bias = 1.0f / floatCompressionBias;
 
         const int stackBufferSize =
             Alignment - 1 +
-            sizeof(float) * 8 * 8 * 1; // Vector256<float>[8] x 1
+            sizeof(float) * 16 * 4 * 1; // Vector512<float>[8] x 1
 
         byte* stackBuffer = stackalloc byte[stackBufferSize];
         byte* alignedBuffer = (byte*)((nint)(stackBuffer + (Alignment - 1)) & -Alignment);
 
-        Vector256<float>* linDepthA = (Vector256<float>*)alignedBuffer;
+        Vector512<float>* linDepthA = (Vector512<float>*)alignedBuffer;
+        uint width = m_width;
 
         for (uint blockY = 0; blockY < m_blocksY; ++blockY)
         {
             for (uint blockX = 0; blockX < m_blocksX; ++blockX)
             {
+                uint* dst = (uint*) target + (8 * blockX + width * (8 * blockY));
+
                 if (m_hiZ[blockY * m_blocksX + blockX] == 1)
                 {
                     Vector256<uint> zero = Vector256<uint>.Zero;
                     for (uint y = 0; y < 8; ++y)
                     {
-                        uint* dest = (uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y)));
-                        zero.StoreAligned(dest);
+                        zero.StoreAligned(dst);
+                        dst += width;
                     }
                     continue;
                 }
 
-                Vector256<float> vBias = Vector256.Create(bias);
-                Vector256<float> vOne = Vector256.Create(1.0f);
-                Vector256<float> vDiv = Vector256.Create(100 * 256 * 2 * 0.25f);
-                Vector256<float> vSt = Vector256.Create(0.25f + 1000.0f);
-                Vector256<float> vSf = Vector256.Create(1000.0f - 0.25f);
+                Vector512<float> vBias = Vector512.Create(bias);
+                Vector512<float> vOne = Vector512.Create(1.0f);
+                Vector512<float> vDiv = Vector512.Create(100 * 256 * 2 * 0.25f);
+                Vector512<float> vSt = Vector512.Create(0.25f + 1000.0f);
+                Vector512<float> vSf = Vector512.Create(1000.0f - 0.25f);
 
                 Vector128<int>* source = &m_depthBuffer[8 * (blockY * m_blocksX + blockX)];
-                for (uint y = 0; y < 8; ++y)
+                for (uint y = 0; y < 4; y++)
                 {
-                    Vector128<int> depthI = Vector128.LoadAligned((int*)source++);
+                    Vector256<int> depthI = Vector256.Load((int*)(source + y * 2));
 
-                    Vector256<int> depthI256 = (Avx2.ConvertToVector256Int32(depthI.AsUInt16()) << 12);
-                    Vector256<float> depth = (depthI256.AsSingle() * vBias);
+                    Vector512<int> depthI512 = (Avx512F.ConvertToVector512Int32(depthI.AsUInt16()) << 12);
+                    Vector512<float> depth = (depthI512.AsSingle() * vBias);
 
-                    Vector256<float> linDepth = (vDiv / (vSt - ((vOne - depth) * vSf)));
+                    Vector512<float> linDepth = (vDiv / (vSt - ((vOne - depth) * vSf)));
                     linDepth.StoreAligned((float*)(linDepthA + y));
                 }
+                
+                Vector512<float> vRcp100 = Vector512.Create(1.0f / 100.0f);
+                Vector512<ushort> vZeroMax = Avx512BW.UnpackLow(Vector512<byte>.Zero, Vector512<byte>.AllBitsSet).AsUInt16();
+                Vector512<ushort> vMask = Vector512.Create((ushort)0xff);
 
-                Vector256<float> vRcp100 = Vector256.Create(1.0f / 100.0f);
-                Vector256<ushort> vZeroMax = Avx2.UnpackLow(Vector256<byte>.Zero, Vector256<byte>.AllBitsSet).AsUInt16();
-                Vector256<ushort> vMask = Vector256.Create((ushort)0xff);
-
-                for (uint y = 0; y < 8; y += 4)
                 {
-                    Vector256<float> depth0 = Vector256.LoadAligned((float*)(linDepthA + y + 0));
-                    Vector256<float> depth1 = Vector256.LoadAligned((float*)(linDepthA + y + 1));
-                    Vector256<float> depth2 = Vector256.LoadAligned((float*)(linDepthA + y + 2));
-                    Vector256<float> depth3 = Vector256.LoadAligned((float*)(linDepthA + y + 3));
+                    Vector512<float> depth0 = Vector512.LoadAligned((float*) (linDepthA + 0));
+                    Vector512<float> depth1 = Vector512.LoadAligned((float*) (linDepthA + 1));
+                    Vector512<float> depth2 = Vector512.LoadAligned((float*) (linDepthA + 2));
+                    Vector512<float> depth3 = Vector512.LoadAligned((float*) (linDepthA + 3));
 
-                    Vector256<int> vR32_0 = Avx.ConvertToVector256Int32WithTruncation(depth0 * vRcp100);
-                    Vector256<int> vR32_1 = Avx.ConvertToVector256Int32WithTruncation(depth1 * vRcp100);
-                    Vector256<int> vR32_2 = Avx.ConvertToVector256Int32WithTruncation(depth2 * vRcp100);
-                    Vector256<int> vR32_3 = Avx.ConvertToVector256Int32WithTruncation(depth3 * vRcp100);
+                    Vector512<int> vR32_0 = Avx512F.ConvertToVector512Int32WithTruncation(depth0 * vRcp100);
+                    Vector512<int> vR32_1 = Avx512F.ConvertToVector512Int32WithTruncation(depth1 * vRcp100);
+                    Vector512<int> vR32_2 = Avx512F.ConvertToVector512Int32WithTruncation(depth2 * vRcp100);
+                    Vector512<int> vR32_3 = Avx512F.ConvertToVector512Int32WithTruncation(depth3 * vRcp100);
 
-                    Vector256<ushort> vR16_0 = Avx2.PackUnsignedSaturate(vR32_0, vR32_1) & vMask;
-                    Vector256<ushort> vR16_1 = Avx2.PackUnsignedSaturate(vR32_2, vR32_3) & vMask;
-                    Vector256<byte> vR8 = Avx2.PackUnsignedSaturate(vR16_0.AsInt16(), vR16_1.AsInt16());
+                    Vector512<ushort> vR16_0 = Avx512BW.PackUnsignedSaturate(vR32_0, vR32_1) & vMask;
+                    Vector512<ushort> vR16_1 = Avx512BW.PackUnsignedSaturate(vR32_2, vR32_3) & vMask;
+                    Vector512<byte> vR8 = Avx512BW.PackUnsignedSaturate(vR16_0.AsInt16(), vR16_1.AsInt16());
 
-                    Vector256<int> vG32_0 = Avx.ConvertToVector256Int32WithTruncation(depth0);
-                    Vector256<int> vG32_1 = Avx.ConvertToVector256Int32WithTruncation(depth1);
-                    Vector256<int> vG32_2 = Avx.ConvertToVector256Int32WithTruncation(depth2);
-                    Vector256<int> vG32_3 = Avx.ConvertToVector256Int32WithTruncation(depth3);
+                    Vector512<int> vG32_0 = Avx512F.ConvertToVector512Int32WithTruncation(depth0);
+                    Vector512<int> vG32_1 = Avx512F.ConvertToVector512Int32WithTruncation(depth1);
+                    Vector512<int> vG32_2 = Avx512F.ConvertToVector512Int32WithTruncation(depth2);
+                    Vector512<int> vG32_3 = Avx512F.ConvertToVector512Int32WithTruncation(depth3);
 
-                    Vector256<ushort> vG16_0 = Avx2.PackUnsignedSaturate(vG32_0, vG32_1) & vMask;
-                    Vector256<ushort> vG16_1 = Avx2.PackUnsignedSaturate(vG32_2, vG32_3) & vMask;
-                    Vector256<byte> vG8 = Avx2.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
+                    Vector512<ushort> vG16_0 = Avx512BW.PackUnsignedSaturate(vG32_0, vG32_1) & vMask;
+                    Vector512<ushort> vG16_1 = Avx512BW.PackUnsignedSaturate(vG32_2, vG32_3) & vMask;
+                    Vector512<byte> vG8 = Avx512BW.PackUnsignedSaturate(vG16_0.AsInt16(), vG16_1.AsInt16());
 
-                    Vector256<ushort> vRG_Lo = Avx2.UnpackLow(vR8, vG8).AsUInt16();
-                    Vector256<ushort> vRG_Hi = Avx2.UnpackHigh(vR8, vG8).AsUInt16();
+                    Vector512<ushort> vRG_Lo = Avx512BW.UnpackLow(vR8, vG8).AsUInt16();
+                    Vector512<ushort> vRG_Hi = Avx512BW.UnpackHigh(vR8, vG8).AsUInt16();
 
-                    Vector256<uint> result1 = Avx2.UnpackLow(vRG_Lo, vZeroMax).AsUInt32();
-                    Vector256<uint> result2 = Avx2.UnpackHigh(vRG_Lo, vZeroMax).AsUInt32();
-                    Vector256<uint> result3 = Avx2.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
-                    Vector256<uint> result4 = Avx2.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
+                    Vector512<uint> result1 = Avx512BW.UnpackLow(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector512<uint> result2 = Avx512BW.UnpackHigh(vRG_Lo, vZeroMax).AsUInt32();
+                    Vector512<uint> result3 = Avx512BW.UnpackLow(vRG_Hi, vZeroMax).AsUInt32();
+                    Vector512<uint> result4 = Avx512BW.UnpackHigh(vRG_Hi, vZeroMax).AsUInt32();
 
-                    result1.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 0))));
-                    result2.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 1))));
-                    result3.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 2))));
-                    result4.StoreAligned((uint*)(target + 4 * (8 * blockX + m_width * (8 * blockY + y + 3))));
+                    result1.GetLower().StoreAligned(dst);
+                    result1.GetUpper().StoreAligned(dst += width);
+                    result2.GetLower().StoreAligned(dst += width);
+                    result2.GetUpper().StoreAligned(dst += width);
+                    
+                    result3.GetLower().StoreAligned(dst += width);
+                    result3.GetUpper().StoreAligned(dst += width);
+                    result4.GetLower().StoreAligned(dst += width);
+                    result4.GetUpper().StoreAligned(dst += width);
+                    dst += width;
                 }
             }
         }
