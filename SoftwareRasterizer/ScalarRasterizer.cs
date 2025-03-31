@@ -995,18 +995,20 @@ public unsafe class ScalarRasterizer : Rasterizer
                 Vector4 add128 = new(0.5f - minEdgeOffset * (OFFSET_QUANTIZATION_FACTOR - 1) / (maxOffset - minEdgeOffset));
                 Vector4 edgeOffsets0, edgeOffsets1, edgeOffsets2, edgeOffsets3;
 
-                edgeOffsets0 = (-(x0 * edgeNormalsX0) + (-(y0 * edgeNormalsY0) + add128));
-                edgeOffsets1 = (-(x1 * edgeNormalsX1) + (-(y1 * edgeNormalsY1) + add128));
-                edgeOffsets2 = (-(x2 * edgeNormalsX2) + (-(y2 * edgeNormalsY2) + add128));
-                edgeOffsets3 = (-(x3 * edgeNormalsX3) + (-(y3 * edgeNormalsY3) + add128));
+                edgeOffsets0 = -(x0 * edgeNormalsX0) + (-(y0 * edgeNormalsY0) + add128);
+                edgeOffsets1 = -(x1 * edgeNormalsX1) + (-(y1 * edgeNormalsY1) + add128);
+                edgeOffsets2 = -(x2 * edgeNormalsX2) + (-(y2 * edgeNormalsY2) + add128);
+                edgeOffsets3 = -(x3 * edgeNormalsX3) + (-(y3 * edgeNormalsY3) + add128);
 
-                edgeOffsets1 = ((minX.ToSingle() * edgeNormalsX1) + edgeOffsets1);
-                edgeOffsets2 = ((minX.ToSingle() * edgeNormalsX2) + edgeOffsets2);
-                edgeOffsets3 = ((minX.ToSingle() * edgeNormalsX3) + edgeOffsets3);
+                Vector4 fMinX = minX.ToSingle();
+                edgeOffsets1 = (fMinX * edgeNormalsX1) + edgeOffsets1;
+                edgeOffsets2 = (fMinX * edgeNormalsX2) + edgeOffsets2;
+                edgeOffsets3 = (fMinX * edgeNormalsX3) + edgeOffsets3;
 
-                edgeOffsets1 = ((minY.ToSingle() * edgeNormalsY1) + edgeOffsets1);
-                edgeOffsets2 = ((minY.ToSingle() * edgeNormalsY2) + edgeOffsets2);
-                edgeOffsets3 = ((minY.ToSingle() * edgeNormalsY3) + edgeOffsets3);
+                Vector4 fMinY = minY.ToSingle();
+                edgeOffsets1 = (fMinY * edgeNormalsY1) + edgeOffsets1;
+                edgeOffsets2 = (fMinY * edgeNormalsY2) + edgeOffsets2;
+                edgeOffsets3 = (fMinY * edgeNormalsY3) + edgeOffsets3;
 
                 // Quantize slopes
                 Vector4I slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);

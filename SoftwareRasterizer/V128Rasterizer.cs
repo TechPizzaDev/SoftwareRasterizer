@@ -1081,13 +1081,15 @@ public unsafe class V128Rasterizer<Fma> : Rasterizer
         edgeOffsets2 = Fma.MulAddNeg(x2, edgeNormalsX2, Fma.MulAddNeg(y2, edgeNormalsY2, add128));
         edgeOffsets3 = Fma.MulAddNeg(x3, edgeNormalsX3, Fma.MulAddNeg(y3, edgeNormalsY3, add128));
 
-        edgeOffsets1 = Fma.MulAdd(V128.ConvertToSingle(minX), edgeNormalsX1, edgeOffsets1);
-        edgeOffsets2 = Fma.MulAdd(V128.ConvertToSingle(minX), edgeNormalsX2, edgeOffsets2);
-        edgeOffsets3 = Fma.MulAdd(V128.ConvertToSingle(minX), edgeNormalsX3, edgeOffsets3);
+        Vector128<float> fMinX = V128.ConvertToSingle(minX);
+        edgeOffsets1 = Fma.MulAdd(fMinX, edgeNormalsX1, edgeOffsets1);
+        edgeOffsets2 = Fma.MulAdd(fMinX, edgeNormalsX2, edgeOffsets2);
+        edgeOffsets3 = Fma.MulAdd(fMinX, edgeNormalsX3, edgeOffsets3);
 
-        edgeOffsets1 = Fma.MulAdd(V128.ConvertToSingle(minY), edgeNormalsY1, edgeOffsets1);
-        edgeOffsets2 = Fma.MulAdd(V128.ConvertToSingle(minY), edgeNormalsY2, edgeOffsets2);
-        edgeOffsets3 = Fma.MulAdd(V128.ConvertToSingle(minY), edgeNormalsY3, edgeOffsets3);
+        Vector128<float> fMinY = V128.ConvertToSingle(minY);
+        edgeOffsets1 = Fma.MulAdd(fMinY, edgeNormalsY1, edgeOffsets1);
+        edgeOffsets2 = Fma.MulAdd(fMinY, edgeNormalsY2, edgeOffsets2);
+        edgeOffsets3 = Fma.MulAdd(fMinY, edgeNormalsY3, edgeOffsets3);
 
         // Quantize slopes
         Vector128<int> slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);

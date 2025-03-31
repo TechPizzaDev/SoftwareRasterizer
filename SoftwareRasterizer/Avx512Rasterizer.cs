@@ -993,14 +993,16 @@ public unsafe class Avx512Rasterizer<Fma> : Rasterizer
             edgeOffsets1 = Fma.MulAddNeg(x1, edgeNormalsX1, Fma.MulAddNeg(y1, edgeNormalsY1, add256));
             edgeOffsets2 = Fma.MulAddNeg(x2, edgeNormalsX2, Fma.MulAddNeg(y2, edgeNormalsY2, add256));
             edgeOffsets3 = Fma.MulAddNeg(x3, edgeNormalsX3, Fma.MulAddNeg(y3, edgeNormalsY3, add256));
+            
+            Vector256<float> fMinX = Avx.ConvertToVector256Single(minX);
+            edgeOffsets1 = Fma.MulAdd(fMinX, edgeNormalsX1, edgeOffsets1);
+            edgeOffsets2 = Fma.MulAdd(fMinX, edgeNormalsX2, edgeOffsets2);
+            edgeOffsets3 = Fma.MulAdd(fMinX, edgeNormalsX3, edgeOffsets3);
 
-            edgeOffsets1 = Fma.MulAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX1, edgeOffsets1);
-            edgeOffsets2 = Fma.MulAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX2, edgeOffsets2);
-            edgeOffsets3 = Fma.MulAdd(Avx.ConvertToVector256Single(minX), edgeNormalsX3, edgeOffsets3);
-
-            edgeOffsets1 = Fma.MulAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY1, edgeOffsets1);
-            edgeOffsets2 = Fma.MulAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY2, edgeOffsets2);
-            edgeOffsets3 = Fma.MulAdd(Avx.ConvertToVector256Single(minY), edgeNormalsY3, edgeOffsets3);
+            Vector256<float> fMinY = Avx.ConvertToVector256Single(minY);
+            edgeOffsets1 = Fma.MulAdd(fMinY, edgeNormalsY1, edgeOffsets1);
+            edgeOffsets2 = Fma.MulAdd(fMinY, edgeNormalsY2, edgeOffsets2);
+            edgeOffsets3 = Fma.MulAdd(fMinY, edgeNormalsY3, edgeOffsets3);
 
             // Quantize slopes
             Vector256<int> slopeLookups0 = quantizeSlopeLookup(edgeNormalsX0, edgeNormalsY0);
@@ -1241,7 +1243,7 @@ public unsafe class Avx512Rasterizer<Fma> : Rasterizer
                     {
                         Vector128<int> A = Vector128.CreateScalar((long)blockMask).AsInt32();
                         Vector128<int> B = (A.AsInt16() << 4).AsInt32();
-                        Vector256<int> C = Avx2.InsertVector128(A.ToVector256Unsafe(), B, 1);
+                        Vector256<int> C = Vector256.Create(A, B);
                         Vector256<short> rowMask = Avx2.UnpackLow(C.AsByte(), C.AsByte()).AsInt16();
 
                         d0 = Avx2.BlendVariable(Vector256<byte>.Zero, d0.AsByte(), (rowMask << 3).AsByte()).AsUInt16();
